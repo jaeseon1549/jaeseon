@@ -1,0 +1,17 @@
+{
+  "name": "生词本 새 단어 공책",
+  "short_name": "단어 공책",
+  "description": "중국어 단어 말하기·쓰기 복습",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EDF3EE",
+  "theme_color": "#2E7A5E",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
