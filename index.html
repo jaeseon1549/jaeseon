@@ -184,6 +184,7 @@ select{ appearance:none; padding-right:30px;
 .slots .gz{ --s:30px; }
 .slots-n{ font-size:13px; color:var(--muted); margin-left:10px; }
 .slots-n.solo{ margin:10px 0 0; }
+.mist{ text-align:center; font-size:14px; color:var(--pen); margin:16px 0 0; min-height:22px; }
 .tries{ display:flex; justify-content:center; gap:10px; margin:16px 0 0; }
 .try{ position:relative; width:14px; height:14px; border-radius:50%; border:1.5px solid var(--line); }
 .try.x{ border-color:var(--pen); }
@@ -776,7 +777,9 @@ function tagsHTML(w) {
   if (!w.mean && w.st !== 'pending') t.push('<span class="tag need">뜻 입력 필요</span>');
   else if (w.mean && w.sp.seen === 0 && w.wr.seen === 0) t.push('<span class="tag new">새 단어</span>');
   if (w.sp.w > 1) t.push(`<span class="tag">말하기 복습 ${w.sp.n}/3</span>`);
+  else if (w.sp.w < 1) t.push('<span class="tag new">말하기 쉬움</span>');
   if (w.wr.w > 1) t.push(`<span class="tag">쓰기 복습 ${w.wr.n}/3</span>`);
+  else if (w.wr.w < 1) t.push('<span class="tag new">쓰기 쉬움</span>');
   return t.join('');
 }
 const toneless = w => (w.py || []).join('').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -864,7 +867,7 @@ async function lookup(words) {
 /* 단어 고치기 */
 let editId = null;
 function recRow(label, s) {
-  return `<tr><th>${label}</th><td>${s.seen}번 풀기</td><td>한 번에 ${s.ok1}</td><td>놓침 ${s.miss}</td><td>${s.w > 1 ? `복습 ${s.n}/3` : '보통'}</td></tr>`;
+  return `<tr><th>${label}</th><td>${s.seen}번 풀기</td><td>한 번에 ${s.ok1}</td><td>놓침 ${s.miss}</td><td>${s.w > 1 ? `복습 ${s.n}/3` : (s.w < 1 ? '쉬움' : '보통')}</td></tr>`;
 }
 function openEdit(id) {
   const w = byId(id); if (!w) return;
@@ -929,15 +932,18 @@ async function onEditAction(act) {
 const sessions = { sp: null, wr: null };
 const MODE_NAME = { sp: '말하기', wr: '쓰기' };
 function newSession(mode) {
-  return { mode, total: S.settings.len, idx: 0, results: [], recent: [], cur: null, phase: 'ask', self: false, auto: false };
+  return { mode, total: S.settings.len, idx: 0, results: [], recent: [], skipped: new Set(), passed: 0, cur: null, phase: 'ask', self: false, auto: false };
 }
 function pick(mode, sess) {
   const pool = eligible();
   if (!pool.length) return null;
   const win = Math.min(3, pool.length - 1);
   const recent = win > 0 ? sess.recent.slice(-win) : [];
-  let c = pool.filter(w => !recent.includes(w.id));
-  if (!c.length) c = pool;
+  const skipped = sess.skipped || new Set();
+  let c = pool.filter(w => !skipped.has(w.id));
+  if (!c.length) return null;
+  const fresh = c.filter(w => !recent.includes(w.id));
+  if (fresh.length) c = fresh;
   const ws = c.map(w => w[mode].w + (w[mode].seen === 0 ? 1 : 0));
   let r = Math.random() * ws.reduce((a, b) => a + b, 0);
   for (let i = 0; i < c.length; i++) { r -= ws[i]; if (r <= 0) return c[i]; }
@@ -946,7 +952,7 @@ function pick(mode, sess) {
 function loadQuestion(sess) {
   const w = pick(sess.mode, sess);
   if (sess.mode === 'wr') stopWriters(sess);
-  if (!w) { sess.phase = sess.results.length ? 'summary' : 'start'; return; }
+  if (!w) { sess.phase = (sess.results.length || sess.passed) ? 'summary' : 'start'; return; }
   Object.assign(sess, {
     padsEl: null, padsFor: null, writers: [], doneChars: new Set(), hwFail: false, animated: false,
     cur: w.id, phase: 'ask', fails: 0, outcome: null, gaveUp: false, heard: null, msg: null, hint: null,
@@ -957,18 +963,31 @@ function loadQuestion(sess) {
 }
 /* 출제 빈도 규칙
    한 번에 정답: 한 번에 맞힌 횟수 +1, 3번이 되면 빈도를 처음(1)으로
-   두세 번째에 정답: 빈도 +1
-   세 번 모두 틀림 / 모르겠어요: 빈도 +2, 한 번에 맞힌 횟수는 0으로 */
+   고치고 나서 정답: 빈도 +1
+   모르겠어요: 빈도 +2, 한 번에 맞힌 횟수는 0으로
+   건너뛰기: 쉬운 단어로 보고 빈도를 절반(0.5)으로 */
 function record(w, mode, outcome) {
   const s = w[mode];
   const before = { ...s };
+  if (outcome === 'pass') { s.w = 0.5; s.n = 0; s.last = Date.now(); touch(w); return { before, reset: false }; }
   s.seen++; s.last = Date.now();
   let reset = false;
-  if (outcome === 'first') { s.ok1++; s.n++; if (s.n >= 3) { reset = s.w > 1; s.w = 1; s.n = 0; } }
+  if (outcome === 'first') { s.ok1++; s.n++; if (s.n >= 3) { reset = s.w > 1; s.w = Math.min(s.w, 1); s.n = 0; } }
   else if (outcome === 'retry') { s.ok2++; s.w = Math.min(MAXW, s.w + 1); }
   else { s.miss++; s.w = Math.min(MAXW, s.w + 2); s.n = 0; }
   touch(w);
   return { before, reset };
+}
+function skipQuestion(sess) {
+  const w = byId(sess.cur); if (!w) return;
+  abortListening(); sess.listening = false;
+  if (sess.mode === 'wr') stopWriters(sess);
+  record(w, sess.mode, 'pass');
+  sess.skipped.add(w.id);
+  sess.passed++;
+  loadQuestion(sess);
+  renderQuiz(sess.mode);
+  window.scrollTo(0, 0);
 }
 function finish(sess, outcome) {
   const w = byId(sess.cur); if (!w) return;
@@ -1022,7 +1041,7 @@ function renderQuiz(mode) {
   if (!w && sess.phase !== 'reveal') { loadQuestion(sess); if (sess.phase !== 'ask') { renderQuiz(mode); return; } w = byId(sess.cur); }
   if (!w) { sess.idx++; if (sess.idx >= sess.total) sess.phase = 'summary'; else loadQuestion(sess); renderQuiz(mode); return; }
 
-  root.innerHTML = quizTop(sess) + promptHTML(w, mode) + triesHTML(sess) + (mode === 'sp' ? speakStage(sess, w) : writeStage(sess, w));
+  root.innerHTML = quizTop(sess) + promptHTML(w, mode) + (mode === 'sp' ? triesHTML(sess) : wrTries(sess)) + (mode === 'sp' ? speakStage(sess, w) : writeStage(sess, w));
   if (mode === 'wr') mountPads(sess, w);
   const ah = root.querySelector('.ans-han[data-mark="circle"]');
   if (ah) drawMark(ah, 'circle');
@@ -1049,6 +1068,15 @@ function promptHTML(w, mode) {
     : `<p class="slots-n solo">${n}글자</p>`;
   return `<div class="prompt"><p class="pos">${esc(w.pos)}</p><p class="mean">${esc(w.mean)}</p>${slots}</div>`;
 }
+function wrTries(sess) {
+  if (!useHW(sess)) return '';
+  let t = '';
+  if (sess.phase === 'reveal') {
+    if (sess.outcome === 'miss') t = '정답 획순이에요';
+    else t = sess.fails ? `틀린 획 ${sess.fails}번` : '틀린 획 없이 완성';
+  } else if (sess.fails) t = `틀린 획 ${sess.fails}번`;
+  return `<p class="mist">${t || '&nbsp;'}</p>`;
+}
 function triesHTML(sess) {
   const ok = sess.phase === 'reveal' && sess.outcome !== 'miss';
   const f = Math.min(3, sess.fails);
@@ -1067,7 +1095,11 @@ function verdictText(sess, w) {
     if (sess.reset) return '한 번에 맞혔어요. 이 단어는 이제 평소만큼 나와요.';
     return s.w > 1 ? `한 번에 맞혔어요. 복습 단어라 한 번에 맞힌 횟수 ${s.n}/3이에요.` : '한 번에 맞혔어요.';
   }
-  if (sess.outcome === 'retry') return `${sess.fails + 1}번째에 맞혔어요. 조금 더 자주 나올 거예요.`;
+  if (sess.outcome === 'retry') {
+    if (sess.mode === 'wr' && useHW(sess)) return `틀린 획을 고쳐서 다 썼어요. 조금 더 자주 나올 거예요.`;
+    return `${sess.fails + 1}번째에 맞혔어요. 조금 더 자주 나올 거예요.`;
+  }
+  if (sess.mode === 'wr' && useHW(sess)) return '정답 획순이에요. 한 번 따라 써 보고 넘어가요.';
   return sess.gaveUp ? '다음에 더 자주 나올 거예요. 발음을 들어 보고 넘어가요.' : '이번에는 놓쳤어요. 앞으로 더 자주 나올 거예요.';
 }
 function revealBlock(sess, w, circleOnAnswer) {
@@ -1118,7 +1150,7 @@ function speakStage(sess, w) {
         </details>
       </div>
       ${fb}
-      <div class="actions"><button type="button" class="btn ghost" data-act="giveup">모르겠어요</button></div>
+      <div class="actions"><button type="button" class="btn ghost" data-act="giveup">모르겠어요</button><button type="button" class="btn ghost" data-act="skip">건너뛰기</button></div>
       ${overrideLink}
       <div class="stage-links">${SR ? '<button type="button" class="link" data-act="use-mic">앱 마이크로 말하기</button>' : ''}<button type="button" class="link" data-act="use-self">스스로 채점하기</button></div>`;
   }
@@ -1128,7 +1160,7 @@ function speakStage(sess, w) {
       <p class="live" id="live" lang="zh-CN"></p>
     </div>
     ${fb}
-    <div class="actions"><button type="button" class="btn ghost" data-act="giveup" ${sess.listening ? 'disabled' : ''}>모르겠어요</button></div>
+    <div class="actions"><button type="button" class="btn ghost" data-act="giveup" ${sess.listening ? 'disabled' : ''}>모르겠어요</button><button type="button" class="btn ghost" data-act="skip" ${sess.listening ? 'disabled' : ''}>건너뛰기</button></div>
     ${overrideLink}
     ${sess.listening ? '' : '<div class="stage-links"><button type="button" class="link" data-act="use-kbd">키보드 음성 입력으로 말하기</button></div>'}`;
 }
@@ -1204,22 +1236,23 @@ function writeStage(sess, w) {
       <div class="pair"><button type="button" class="btn ghost big" data-act="self-miss">틀렸어요</button><button type="button" class="btn primary big" data-act="self-ok">맞게 썼어요</button></div>`;
   }
   if (useHW(sess)) {
-    return html + `<p class="hw-guide">획순대로 한 획씩 써 주세요. 틀린 획은 사라지고, 세 번 틀리면 정답 획순을 보여줘요.</p>
+    return html + `<p class="hw-guide">획순대로 한 획씩 써 주세요. 틀린 획은 사라지니 될 때까지 다시 그으면 돼요. 정답 획순은 모르겠어요를 눌렀을 때만 보여줘요.</p>
       <div class="feedback" id="wr-fb" aria-live="polite">${wrFeedback(sess)}</div>
-      <div class="actions"><button type="button" class="btn ghost big" data-act="giveup">모르겠어요</button></div>
+      <div class="actions"><button type="button" class="btn ghost" data-act="giveup">모르겠어요</button><button type="button" class="btn ghost" data-act="skip">건너뛰기</button></div>
       <div class="stage-links"><button type="button" class="link" data-act="use-free">획순 없이 쓰고 스스로 채점하기</button></div>`;
   }
   return html + `<div class="pad-tools"><button type="button" class="link" data-act="undo">한 획 지우기</button><button type="button" class="link" data-act="clear">모두 지우기</button></div>
     <div class="feedback" aria-live="polite">${wrFeedback(sess)}</div>
     <div class="actions">
-      <button type="button" class="btn ghost big" data-act="giveup">모르겠어요</button>
+      <button type="button" class="btn ghost" data-act="giveup">모르겠어요</button>
       <button type="button" class="btn primary big" data-act="submit">정답과 비교하기</button>
+      <button type="button" class="btn ghost" data-act="skip">건너뛰기</button>
     </div>
     ${window.HanziWriter && sess.hwFail !== 'data' ? '<div class="stage-links"><button type="button" class="link" data-act="use-hw">획순 채점으로 하기</button></div>' : ''}`;
 }
 function patchWrite(sess) {
   const root = $('#wr-root');
-  const t = root.querySelector('.tries'); if (t) t.outerHTML = triesHTML(sess);
+  const t = root.querySelector('.mist'); if (t) t.outerHTML = wrTries(sess);
   const fb = $('#wr-fb'); if (fb) fb.innerHTML = wrFeedback(sess);
 }
 const cssVar = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
@@ -1264,7 +1297,7 @@ function mountHW(sess, w) {
         showOutline: false, showCharacter: false,
         strokeColor: ink, outlineColor: soft, drawingColor: ink, highlightColor: grid, highlightCompleteColor: grid,
         drawingWidth: Math.max(5, Math.round(size * 0.05)),
-        showHintAfterMisses: false, highlightOnComplete: true, leniency: 1.35,
+        showHintAfterMisses: 5, highlightOnComplete: true, leniency: 1.35,
         strokeAnimationSpeed: 1.3, delayBetweenStrokes: 160,
         onLoadCharDataError: () => hwFailed(sess, wid, 'data'),
       });
@@ -1284,10 +1317,9 @@ function onHwMistake(sess, wid) {
   if (sessions.wr !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
   const w = byId(wid); if (!w) return;
   sess.fails++;
-  if (sess.fails >= 3) { finish(sess, 'miss'); return; }
-  sess.msg = `획이 달라요. 다시 그어 보세요. 기회가 ${3 - sess.fails}번 남았어요.`;
+  sess.msg = sess.fails === 1 ? '획이 달라요. 다시 그어 보세요.' : `획이 달라요. 다시 그어 보세요. (지금까지 ${sess.fails}번)`;
   sess.msgCalm = false;
-  if (sess.fails === 2 && w.py.join('').trim()) sess.hint = w.py.join(' ');
+  if (sess.fails >= 3 && w.py.join('').trim()) sess.hint = w.py.join(' ');
   patchWrite(sess);
 }
 function onHwChar(sess, wid, i, n) {
@@ -1445,7 +1477,7 @@ function renderStart(mode, root) {
         ? `휴대폰 키보드의 마이크(받아쓰기)로 중국어를 말하면, 받아써진 한자를 병음으로 바꿔 채점해요. 정확도 ${S.settings.pass}% 이상이면 정답이에요.`
         : '소리 내어 말한 뒤 정답을 보고 스스로 채점해요. 설정에서 말하기 방법을 바꿀 수 있어요.')
     : (window.HanziWriter && S.settings.wrMethod !== 'self'
-      ? '칸에 획순대로 한 획씩 쓰면 바로바로 채점해요. 틀린 획이 세 번이면 정답 획순을 보여줘요. 획순 정보는 인터넷에서 받아오고, 한 번 받은 글자는 인터넷이 없어도 돼요.'
+      ? '칸에 획순대로 한 획씩 쓰면 바로바로 채점해요. 틀려도 될 때까지 다시 그을 수 있고, 모르겠어요를 누르면 정답 획순을 보여줘요. 획순 정보는 인터넷에서 받아오고, 한 번 받은 글자는 인터넷이 없어도 돼요.'
       : '칸에 직접 쓴 뒤 정답과 비교해 스스로 채점해요. 설정에서 획순 채점으로 바꿀 수 있어요.');
   root.innerHTML = `<div class="start">
     <h2>${title}</h2>
@@ -1462,15 +1494,15 @@ function renderStart(mode, root) {
 /* 결과 화면 */
 function renderSummary(mode, root, sess) {
   const r = sess.results;
-  if (!r.length) { sess.phase = 'start'; renderStart(mode, root); return; }
+  if (!r.length && !sess.passed) { sess.phase = 'start'; renderStart(mode, root); return; }
   const c = { first: 0, retry: 0, miss: 0 };
   r.forEach(x => c[x.outcome]++);
   const seen = new Set(); const review = [];
   r.forEach(x => { if (x.outcome !== 'first' && !seen.has(x.id)) { seen.add(x.id); const w = byId(x.id); if (w) review.push(w); } });
   root.innerHTML = `<div class="summary">
-    <h2>${r.length}문제를 풀었어요</h2>
+    <h2>${r.length ? `${r.length}문제를 풀었어요` : '이번에는 모두 건너뛰었어요'}</h2>
     <div class="sheet" aria-hidden="true">${r.map(x => `<span class="gz">${MARK[x.outcome]}</span>`).join('')}</div>
-    <p class="sheet-legend">○ 한 번에 ${c.first}개, △ 다시 해서 ${c.retry}개, / 놓친 단어 ${c.miss}개</p>
+    <p class="sheet-legend">○ 한 번에 ${c.first}개, △ 고쳐서 ${c.retry}개, / 놓친 단어 ${c.miss}개${sess.passed ? `, 건너뛴 단어 ${sess.passed}개` : ''}</p>
     ${review.length ? `<h3>다시 볼 단어</h3><ul class="wl">${review.map(w => `
       <li class="rv"><span class="w-han" lang="zh-CN">${ruby(w.hz, w.py)}</span><span class="w-mean">${esc(w.mean)}</span>
       ${TTS ? `<button type="button" class="btn ghost sm" data-act="say" data-hz="${esc(w.hz)}" aria-label="${esc(w.hz)} 발음 듣기">${ICON.play}</button>` : '<span></span>'}</li>`).join('')}</ul>`
@@ -1503,6 +1535,7 @@ function bindQuiz(mode) {
       case 'selfcheck': if (sess && w) { sess.phase = 'selfcheck'; renderQuiz(mode); if (S.settings.autoSpeak) speak(w.hz); } break;
       case 'self-ok': if (sess) finish(sess, sess.fails === 0 ? 'first' : 'retry'); break;
       case 'self-miss': if (sess) { sess.fails = 3; finish(sess, 'miss'); } break;
+      case 'skip': if (sess && sess.phase === 'ask' && !sess.busy) skipQuestion(sess); break;
       case 'giveup': if (sess && !sess.busy) { sess.fails = 3; sess.gaveUp = true; finish(sess, 'miss'); } break;
       case 'next':
         if (!sess) break;
@@ -1550,8 +1583,9 @@ function openSettings() {
     </div>
     <div class="set-block"><h3>문제가 나오는 규칙</h3>
       <ul class="rules">
-        <li>세 번 모두 틀리거나 모르겠어요를 누르면 그 단어가 더 자주 나와요.</li>
-        <li>두세 번째에 맞히면 조금 더 자주 나와요.</li>
+        <li>모르겠어요를 누르거나 말하기에서 세 번 다 틀리면 그 단어가 더 자주 나와요.</li>
+        <li>고쳐서 맞히면 조금 더 자주 나와요.</li>
+        <li>건너뛴 단어는 쉬운 단어로 보고 절반만큼만 나와요.</li>
         <li>복습 중인 단어를 한 번에 맞힌 횟수가 3번 쌓이면 원래대로 돌아가요.</li>
         <li>새로 넣은 단어는 처음 한 번 나올 때까지 조금 더 자주 나와요.</li>
         <li>말하기와 쓰기는 따로 기록해요.</li>
