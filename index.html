@@ -246,6 +246,9 @@ select{ appearance:none; padding-right:30px;
 .ans-mean{ font-size:16px; color:var(--muted); margin-top:-4px; }
 .verdict{ text-align:center; font-size:16px; margin-top:12px; }
 .verdict.no{ color:var(--pen); }
+.sent-note{ max-width:34ch; margin:14px auto 0; padding:12px 14px; border-radius:12px; background:var(--ok-soft); font-size:14px; line-height:1.6; text-align:left; }
+.sent-note p + p{ margin-top:4px; }
+.sent-word{ font-family:var(--f-han); font-size:17px; }
 .mark-svg{ position:absolute; pointer-events:none; overflow:visible; max-width:none; max-height:none; transform:rotate(-2deg); }
 .mark-svg path{ fill:none; stroke:var(--pen); stroke-width:3.6; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:1; stroke-dashoffset:1; animation:draw .55s cubic-bezier(.5,.1,.35,1) .08s forwards; }
 @keyframes draw{ to{ stroke-dashoffset:0; } }
@@ -273,6 +276,8 @@ select{ appearance:none; padding-right:30px;
 .hw-box svg{ display:block; touch-action:none; }
 .hw-guide{ text-align:center; font-size:14px; color:var(--muted); margin-top:12px; line-height:1.5; }
 .pad-tools{ display:flex; justify-content:center; gap:18px; margin-top:4px; }
+.pad-zoom{ display:flex; align-items:center; justify-content:center; gap:14px; margin-top:12px; font-size:13px; color:var(--muted); }
+.zoom-btn{ appearance:none; width:38px; height:38px; border-radius:10px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:20px; line-height:1; cursor:pointer; }
 
 /* 결과 */
 .summary{ padding:26px 0 8px; }
@@ -338,6 +343,9 @@ dialog::backdrop{ background:rgba(10,20,16,.45); }
 .switch[aria-checked="true"]::after{ transform:translateX(20px); }
 .rules{ margin:6px 0 0; padding-left:18px; font-size:14px; line-height:1.6; }
 .btn-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.range-row{ display:flex; align-items:center; gap:14px; }
+.range-row input[type=range]{ flex:1; accent-color:var(--grid); height:34px; }
+.range-val{ min-width:68px; text-align:right; font-size:15px; font-variant-numeric:tabular-nums; }
 .confirm-msg{ font-size:16px; line-height:1.55; }
 textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospace; font-size:12px; border:1.5px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); padding:10px; margin-top:10px; }
 
@@ -500,25 +508,37 @@ function guessPos(w) {
   if (/[가-힣]$/.test(m)) return '명사';
   return '';
 }
-async function fetchPos(w) {
-  for (const tl of ['ko', 'en']) {
-    for (const client of ['gtx', 'at']) {
-      try {
-        const d = await fetchJSON(`https://translate.googleapis.com/translate_a/single?client=${client}&sl=zh-CN&tl=${tl}&hl=${tl}&dt=bd&q=${encodeURIComponent(w.hz)}`);
-        const e = Array.isArray(d && d[1]) ? d[1][0] : null;
+async function posLabels(hz, tl) {
+  const out = [];
+  for (const client of ['gtx', 'at']) {
+    try {
+      const d = await fetchJSON(`https://translate.googleapis.com/translate_a/single?client=${client}&sl=zh-CN&tl=${tl}&hl=${tl}&dt=bd&q=${encodeURIComponent(hz)}`);
+      for (const e of (Array.isArray(d && d[1]) ? d[1] : [])) {
         const raw = (e && e[0]) ? String(e[0]).trim() : '';
         if (!raw) continue;
         const ko = POS_KO[raw.toLowerCase()] || (/[가-힣]/.test(raw) ? raw : '');
-        if (ko) return ko;
-      } catch (e) {}
-    }
+        if (ko && !out.includes(ko)) out.push(ko);
+      }
+      if (out.length) return out;
+    } catch (e) {}
   }
-  return guessPos(w);
+  return out;
+}
+async function fetchPos(w) {
+  const found = [];
+  for (const tl of ['ko', 'en']) {
+    for (const p of await posLabels(w.hz, tl)) if (!found.includes(p)) found.push(p);
+    if (found.length >= 2) break;
+  }
+  if (!found.length) return guessPos(w);
+  const g = guessPos(w);
+  if (g && !found.includes(g)) found.push(g);
+  return found.slice(0, 3).join(', ');
 }
 let posRunning = false;
 async function fillPos(manual) {
   if (posRunning) return;
-  const todo = S.words.filter(w => w.mean && !POS_KIND(w.pos));
+  const todo = S.words.filter(w => w.mean && !POS_KINDS(w.pos).length);
   if (!todo.length) { if (manual) toast('문장에 쓸 품사가 모두 채워져 있어요.'); return; }
   if (navigator.onLine === false) { if (manual) toast('인터넷에 연결된 뒤 다시 눌러 주세요.'); return; }
   posRunning = true;
@@ -528,7 +548,7 @@ async function fillPos(manual) {
     if (!S.words.includes(w)) continue;
     let p = '';
     try { p = await fetchPos(w); } catch (e) { p = guessPos(w); }
-    if (p) { w.pos = clip(p, 8); n++; touch(w); }
+    if (p) { w.pos = clip(p, 18); n++; touch(w); }
   }
   posRunning = false;
   if (n) { renderWords(); if (view === 'sn') renderQuiz('sn'); }
@@ -546,7 +566,7 @@ async function fromMyMemory(hz) {
 
 /* ───────── 저장소: 이 휴대폰(브라우저)에 저장 ───────── */
 const stat = () => ({ w: 1, n: 0, seen: 0, ok1: 0, ok2: 0, miss: 0, last: 0 });
-const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', wrMiss: 5, backStroke: false, lastBackup: 0, lastNag: 0 } });
+const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', wrMiss: 5, backStroke: false, padScale: 1, lastBackup: 0, lastNag: 0 } });
 let S = defaults();
 let storageOK = true;
 const R = { state: 'local' };
@@ -825,7 +845,9 @@ function updateMeta() {
   const weak = S.words.filter(w => w.sp.w > 1 || w.wr.w > 1).length;
   $('#meta').textContent = n ? `단어 ${n}개` + (weak ? `, 복습 중 ${weak}개` : '') : (R.state === 'loading' ? '불러오는 중' : '단어를 모으는 중');
 }
+const statOf = (w, mode) => (w[mode] || (w[mode] = stat()));
 function tagsHTML(w) {
+  statOf(w, 'sp'); statOf(w, 'wr'); statOf(w, 'sn');
   const t = [];
   if (!w.mean && w.st !== 'pending') t.push('<span class="tag need">뜻 입력 필요</span>');
   else if (w.mean && w.sp.seen === 0 && w.wr.seen === 0) t.push('<span class="tag new">새 단어</span>');
@@ -886,9 +908,10 @@ async function addWords(raw) {
   let cut = 0;
   if (fresh.length > 30) { cut = fresh.length - 30; fresh = fresh.slice(0, 30); }
   const now = Date.now();
-  const made = fresh.map((hz, i) => ({ id: uid(), hz, py: pyArr(hz), mean: '', pos: '', added: now + (fresh.length - i), st: 'pending', sp: stat(), wr: stat() }));
+  const made = fresh.map((hz, i) => ({ id: uid(), hz, py: pyArr(hz), mean: '', pos: '', added: now + (fresh.length - i), st: 'pending', sp: stat(), wr: stat(), sn: stat() }));
   S.words.push(...made);
-  touch(...made); renderWords();
+  touch(...made);
+  try { renderWords(); } catch (e) {}
   const msgs = [];
   if (dup.length) msgs.push(`이미 있는 단어: ${dup.join(' ')}`);
   if (bad.length) msgs.push(`중국어가 아니라 뺐어요: ${clip(bad.join(' '), 20)}`);
@@ -897,11 +920,11 @@ async function addWords(raw) {
   if (made.length) await lookup(made);
 }
 
-async function lookup(words) {
+async function lookup(words, quiet) {
   if (navigator.onLine === false) {
     words.forEach(w => { if (w.st === 'pending') w.st = 'failed'; });
     touch(); renderWords();
-    toast('인터넷에 연결되어 있지 않아 뜻을 찾지 못했어요. 단어를 눌러 직접 넣거나, 연결된 뒤 뜻 다시 찾기를 눌러 주세요.');
+    if (!quiet) toast('인터넷에 연결되어 있지 않아 뜻을 찾지 못했어요. 단어를 눌러 직접 넣거나, 연결된 뒤 뜻 다시 찾기를 눌러 주세요.');
     return false;
   }
   let found = 0;
@@ -914,7 +937,7 @@ async function lookup(words) {
     touch(); renderWords();
   }
   const failed = words.filter(w => S.words.includes(w) && w.st === 'failed').map(w => w.hz);
-  if (failed.length) toast(`뜻을 찾지 못한 단어가 있어요: ${failed.join(' ')}. 눌러서 네이버 사전을 보고 직접 넣어 주세요.`);
+  if (failed.length && !quiet) toast(`뜻을 찾지 못한 단어가 있어요: ${failed.join(' ')}. 눌러서 네이버 사전을 보고 직접 넣어 주세요.`);
   return found > 0;
 }
 
@@ -994,14 +1017,15 @@ const jo = (t, withJong, without) => t + (hasJong(t) ? withJong : without);
 const addJong = (t, idx) => { const c = t.charCodeAt(t.length - 1); return (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 === 0) ? t.slice(0, -1) + String.fromCharCode(c + idx) : t; };
 const m1 = w => String(w.mean || '').split(/[,，/]/)[0].trim();
 const stemOf = w => { const m = m1(w); return m.endsWith('다') ? m.slice(0, -1) : null; };
-const POS_KIND = p => {
-  const t = String(p || '');
-  if (/형용사|adjective/i.test(t)) return 'a';
-  if (/동사|verb/i.test(t)) return 'v';
-  if (/대명사|pronoun/i.test(t)) return '';
-  if (/명사|noun/i.test(t)) return 'n';
-  return '';
+const POS_KINDS = p => {
+  const t = String(p || '').toLowerCase().replace(/대명사|pronoun/g, '');
+  const out = [];
+  if (/형용사|adjective/.test(t)) out.push('a');
+  if (/동사|verb/.test(t)) out.push('v');
+  if (/명사|noun/.test(t)) out.push('n');
+  return out;
 };
+const POS_KIND = p => POS_KINDS(p)[0] || '';
 const TPL = [
   { k: 'n', zh: x => `这是${x}。`, ko: w => `이것은 ${jo(m1(w), '이에요', '예요')}.` },
   { k: 'n', zh: x => `这是我的${x}。`, ko: w => `이것은 제 ${jo(m1(w), '이에요', '예요')}.` },
@@ -1019,11 +1043,38 @@ const TPL = [
   { k: 'a', zh: x => `今天很${x}。`, ko: w => { const st = stemOf(w); return st ? `오늘은 ${st}네요.` : `오늘은 ${m1(w)}.`; } },
   { k: 'a', zh: x => `我很${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}네요.` : `저는 ${m1(w)}.`; } },
   { k: 'a', zh: x => `这个很${x}。`, ko: w => { const st = stemOf(w); return st ? `이건 ${st}네요.` : `이건 ${m1(w)}.`; } },
+  { k: 't', zh: x => `${x}很好。`, ko: w => `${jo(m1(w), '은', '는')} 좋아요.` },
+  { k: 't', zh: x => `${x}你忙吗？`, ko: w => `${m1(w)} 바쁘세요?` },
+  { k: 't', zh: x => `我${x}很忙。`, ko: w => `저는 ${m1(w)} 바빠요.` },
+];
+/* 오늘·내일 같은 시간 표현은 자리도 쓰임도 달라서 따로 다뤄요 */
+const TIME_KO = new Set(['오늘', '내일', '어제', '모레', '그저께', '지금', '아침', '점심', '저녁', '밤', '새벽', '오전', '오후', '올해', '작년', '내년', '요즘', '주말', '평일', '이번 주', '다음 주', '지난주', '매일', '오늘밤', '이따가', '나중에']);
+const isTimeWord = w => TIME_KO.has(m1(w)) || /요일$/.test(m1(w));
+const TPL_NOTE = [
+  '这 zhè는 \u0027이\u0027, 是 shì는 \u0027~이다\u0027예요. 这是 + 명사 = 이것은 ~예요.',
+  '的 de는 \u0027~의\u0027를 나타내요. 我的 = 나의.',
+  '有 yǒu = 가지고 있다. 없다고 할 때는 没有를 써요.',
+  '没有 méiyǒu = ~이 없다. 有의 부정은 不有가 아니라 没有예요.',
+  '喜欢 xǐhuan = 좋아하다. 뒤에 명사도 동사도 올 수 있어요.',
+  '동사 앞에 不 bù를 붙이면 부정이 돼요. 不喜欢 = 안 좋아하다.',
+  '要 yào = 원하다, 필요하다. 가게에서 주문할 때도 써요.',
+  '在 zài = ~에 있다, 哪儿 nǎr = 어디. 자리를 물을 때 써요.',
+  '想 xiǎng + 동사 = ~하고 싶다.',
+  '不 bù + 동사 = ~하지 않다. 지금이나 평소의 일을 부정해요.',
+  '문장 끝의 吗 ma는 예/아니오를 묻는 표시예요.',
+  '会 huì + 동사 = 배워서 ~할 줄 안다.',
+  '문장 끝의 吧 ba는 \u0027~하자\u0027처럼 권할 때 써요.',
+  '형용사 앞의 很 hěn은 \u0027매우\u0027라기보다 습관처럼 붙이는 말이에요.',
+  '我很 + 형용사 = 저는 ~해요. 여기서도 很은 습관처럼 붙여요.',
+  '这个 zhège = 이것. 这个很 + 형용사로 상태를 말해요.',
+  '시간을 나타내는 말은 문장 맨 앞에 와요. 今天很好 = 오늘은 좋아요.',
+  '시간 표현 + 주어 + 형용사 + 吗? 순서로 물어요.',
+  '시간을 나타내는 말은 주어 바로 뒤에 올 수도 있어요. 我今天很忙.',
 ];
 function makeSentence(w, avoid) {
-  const k = POS_KIND(w.pos);
-  if (!k) return null;
-  let c = TPL.map((t, i) => ({ t, i })).filter(o => o.t.k === k);
+  const ks = isTimeWord(w) ? ['t'] : POS_KINDS(w.pos);
+  if (!ks.length) return null;
+  let c = TPL.map((t, i) => ({ t, i })).filter(o => ks.includes(o.t.k));
   if (!c.length) return null;
   const fresh = c.filter(o => o.i !== avoid);
   if (fresh.length) c = fresh;
@@ -1054,6 +1105,8 @@ function prepareSentence(sess, w) {
   if (!made) { sess.item = null; sess.loading = false; return; }
   sess.lastTpl = made.tpl;
   sess.zh = made.zh;
+  sess.note = TPL_NOTE[made.tpl] || '';
+  sess.gloss = `${w.hz} ${m1(w)}`;
   sess.item = null; sess.loading = true;
   const hz = onlyHan(made.zh);
   sess.strokes = chars(hz).map(() => []);
@@ -1070,7 +1123,7 @@ function newSession(mode) {
 }
 function poolFor(mode) {
   const base = eligible();
-  return mode === 'sn' ? base.filter(w => POS_KIND(w.pos)) : base;
+  return mode === 'sn' ? base.filter(w => POS_KINDS(w.pos).length) : base;
 }
 function pick(mode, sess) {
   const pool = poolFor(mode);
@@ -1082,7 +1135,7 @@ function pick(mode, sess) {
   if (!c.length) return null;
   const fresh = c.filter(w => !recent.includes(w.id));
   if (fresh.length) c = fresh;
-  const ws = c.map(w => w[mode].w + (w[mode].seen === 0 ? 1 : 0));
+  const ws = c.map(w => statOf(w, mode).w + (statOf(w, mode).seen === 0 ? 1 : 0));
   let r = Math.random() * ws.reduce((a, b) => a + b, 0);
   for (let i = 0; i < c.length; i++) { r -= ws[i]; if (r <= 0) return c[i]; }
   return c[c.length - 1];
@@ -1107,7 +1160,7 @@ function loadQuestion(sess) {
    모르겠어요: 빈도 +2, 한 번에 맞힌 횟수는 0으로
    건너뛰기: 쉬운 단어로 보고 빈도를 절반(0.5)으로 */
 function record(w, mode, outcome) {
-  const s = w[mode];
+  const s = statOf(w, mode);
   const before = { ...s };
   if (outcome === 'pass') { s.w = 0.5; s.n = 0; s.last = Date.now(); touch(w); return { before, reset: false }; }
   s.seen++; s.last = Date.now();
@@ -1237,7 +1290,7 @@ function heardHTML(h, pass) {
 }
 function verdictText(sess, w) {
   const rw = byId(sess.cur) || w;
-  const s = rw[sess.mode] || { w: 1, n: 0 };
+  const s = statOf(rw, sess.mode);
   if (sess.outcome === 'first') {
     if (sess.reset) return '한 번에 맞혔어요. 이 단어는 이제 평소만큼 나와요.';
     return s.w > 1 ? `한 번에 맞혔어요. 복습 단어라 한 번에 맞힌 횟수 ${s.n}/3이에요.` : '한 번에 맞혔어요.';
@@ -1256,6 +1309,7 @@ function revealBlock(sess, w, circleOnAnswer) {
   const canOverride = sess.outcome === 'miss' && !sess.gaveUp && (sess.mode === 'sp' ? !!sess.heard : sess.auto);
   return `${answerHTML(w, circleOnAnswer && sess.outcome !== 'miss')}
     <p class="verdict ${sess.outcome === 'miss' ? 'no' : ''}">${esc(verdictText(sess, w))}</p>
+    ${sess.mode === 'sn' && sess.note ? `<div class="sent-note"><p class="sent-word">${esc(sess.gloss || '')}</p><p>${esc(sess.note)}</p></div>` : ''}
     ${sess.mode === 'sp' ? heardHTML(sess.heard, sess.outcome !== 'miss') : ''}
     ${sess.mode === 'wr' && sess.outcome === 'miss' && sess.notes ? `<ul class="notes">${sess.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
     <div class="actions">
@@ -1385,12 +1439,12 @@ function writeStage(sess, w) {
       <div class="pair"><button type="button" class="btn ghost big" data-act="self-miss">틀렸어요</button><button type="button" class="btn primary big" data-act="self-ok">맞게 썼어요</button></div>`;
   }
   if (useHW(sess)) {
-    return html + `<p class="hw-guide">획순대로 한 획씩 써 주세요. 틀린 획은 사라지니 될 때까지 다시 그으면 돼요. 정답 획순은 모르겠어요를 눌렀을 때만 보여줘요.</p>
+    return html + padZoom() + `<p class="hw-guide">획순대로 한 획씩 써 주세요. 틀린 획은 사라지니 될 때까지 다시 그으면 돼요. 정답 획순은 모르겠어요를 눌렀을 때만 보여줘요.</p>
       <div class="feedback" id="wr-fb" aria-live="polite">${wrFeedback(sess)}</div>
       <div class="actions"><button type="button" class="btn ghost" data-act="giveup">모르겠어요</button><button type="button" class="btn ghost" data-act="skip">건너뛰기</button></div>
       <div class="stage-links"><button type="button" class="link" data-act="use-free">획순 없이 쓰고 스스로 채점하기</button></div>`;
   }
-  return html + `<div class="pad-tools"><button type="button" class="link" data-act="undo">한 획 지우기</button><button type="button" class="link" data-act="clear">모두 지우기</button></div>
+  return html + padZoom() + `<div class="pad-tools"><button type="button" class="link" data-act="undo">한 획 지우기</button><button type="button" class="link" data-act="clear">모두 지우기</button></div>
     <div class="feedback" aria-live="polite">${wrFeedback(sess)}</div>
     <div class="actions">
       <button type="button" class="btn ghost" data-act="giveup">모르겠어요</button>
@@ -1398,6 +1452,9 @@ function writeStage(sess, w) {
       <button type="button" class="btn ghost" data-act="skip">건너뛰기</button>
     </div>
     ${window.HanziWriter && sess.hwFail !== 'data' ? '<div class="stage-links"><button type="button" class="link" data-act="use-hw">획순 채점으로 하기</button></div>' : ''}`;
+}
+function padZoom() {
+  return `<div class="pad-zoom"><button type="button" class="zoom-btn" data-act="pad-" aria-label="칸 작게">−</button><span>칸 크기</span><button type="button" class="zoom-btn" data-act="pad+" aria-label="칸 크게">+</button></div>`;
 }
 function patchWrite(sess) {
   const root = $(`#${sess.mode}-root`);
@@ -1407,12 +1464,16 @@ function patchWrite(sess) {
 const cssVar = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
 const inkColor = () => cssVar('--ink', '#1E2A26');
 let lastPadWidth = 0;
+const padAvail = () => Math.max(200, ($('#main').clientWidth || 360) - 40);
 function padSize(n) {
-  const avail = Math.max(200, ($('#main').clientWidth || 360) - 40);
+  const avail = padAvail();
+  const scale = +S.settings.padScale || 1;
   const per = Math.min(n, n > 4 ? 5 : 4);
+  const fit = Math.floor((avail + 1.5 * (per - 1)) / per);
   const cap = n === 1 ? 210 : n === 2 ? 168 : n <= 4 ? 140 : 112;
-  return Math.max(64, Math.min(cap, Math.floor((avail + 1.5 * (per - 1)) / per)));
+  return Math.max(56, Math.min(Math.round(Math.min(cap, fit) * scale), avail));
 }
+const padsPerRow = size => Math.max(1, Math.floor((padAvail() + 1.5) / Math.max(1, size - 1.5)));
 function mountPads(sess, w) {
   if (useHW(sess)) mountHW(sess, w); else mountCanvasPads(sess, w);
 }
@@ -1420,8 +1481,22 @@ function sizePads(holder, n) {
   const size = padSize(n);
   lastPadWidth = $('#main').clientWidth;
   holder.style.setProperty('--s', size + 'px');
-  holder.style.maxWidth = (Math.min(n, 4) * (size - 1.5) + 1.5) + 'px';
+  holder.style.maxWidth = (Math.min(n, padsPerRow(size)) * (size - 1.5) + 1.5) + 'px';
   return size;
+}
+function zoomPads(sess, step) {
+  const cur = +S.settings.padScale || 1;
+  const next = Math.min(2.4, Math.max(0.7, Math.round((cur + step) * 100) / 100));
+  if (next === cur) return;
+  S.settings.padScale = next;
+  touchSettings();
+  const drawn = useHW(sess) ? sess.doneChars.size || sess.fails : (sess.strokes || []).some(st => st.length);
+  stopWriters(sess);
+  sess.padsEl = null; sess.writers = []; sess.doneChars = new Set();
+  const it = itemOf(sess);
+  if (it) sess.strokes = chars(it.hz).map(() => []);
+  if (drawn && sess.phase === 'ask') { sess.msg = '칸 크기를 바꿔서 이 글자는 처음부터 써요.'; sess.msgCalm = true; }
+  renderQuiz(sess.mode);
 }
 
 /* 획순 채점 */
@@ -1627,14 +1702,14 @@ function renderStart(mode, root) {
         ? '문장을 만들려면 품사가 명사, 동사, 형용사인 단어가 필요해요. 단어장에서 단어를 눌러 품사를 채워 주세요.'
         : '단어장에 단어를 넣으면 그 단어로 문장을 만들어요.')
       : '퀴즈에 낼 단어가 아직 없어요. 단어장에 단어를 넣으면 그 단어로 문제가 나와요.';
-    const canFill = mode === 'sn' && S.words.some(w => w.mean && !POS_KIND(w.pos));
+    const canFill = mode === 'sn' && S.words.some(w => w.mean && !POS_KINDS(w.pos).length);
     root.innerHTML = `<div class="start"><h2>${title}</h2>
       <p class="lead">${why}</p>
       ${canFill ? '<button type="button" class="btn primary big" data-act="fillpos">품사 자동으로 채우기</button>' : ''}
       <button type="button" class="btn ${canFill ? 'ghost' : 'primary'} big" data-act="towords" style="margin-top:10px">단어장으로 가기</button></div>`;
     return;
   }
-  const weak = pool.filter(w => w[mode].w > 1).length;
+  const weak = pool.filter(w => statOf(w, mode).w > 1).length;
   const desc = mode === 'sp'
     ? '한국어 뜻을 보고 중국어로 말해요. 기회는 세 번이에요.'
     : mode === 'sn'
@@ -1699,6 +1774,8 @@ function bindQuiz(mode) {
     const w = sess && itemOf(sess);
     switch (act) {
       case 'fillpos': fillPos(true); break;
+      case 'pad+': if (sess) zoomPads(sess, 0.2); break;
+      case 'pad-': if (sess) zoomPads(sess, -0.2); break;
       case 'towords': go('words'); setTimeout(() => $('#add-input').focus(), 50); break;
       case 'len': S.settings.len = +b.dataset.v; touchSettings(); renderQuiz(mode); break;
       case 'start': case 'again': startSession(mode, b); break;
@@ -1750,8 +1827,11 @@ function openSettings() {
       <div class="chips">${[['stroke', '획순 채점'], ['self', '스스로 채점']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmethod" data-v="${v}" aria-pressed="${(st.wrMethod || 'stroke') === v}">${l}</button>`).join('')}</div>
       <p class="help" style="margin-top:8px">획순 채점은 한 획씩 바로 확인해요. 획순이 틀려도 틀린 획으로 쳐요.</p>
       <p class="field-label" style="margin-top:16px">몇 획 틀리면 오답으로 할까요</p>
-      <div class="chips">${[[3, '3획'], [5, '5획'], [10, '10획'], [0, '제한 없음']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmiss" data-v="${v}" aria-pressed="${(+st.wrMiss || 0) === v}">${l}</button>`).join('')}</div>
-      <p class="help" style="margin-top:8px">정한 횟수만큼 틀리면 정답 획순을 보여주고 오답으로 쳐요. 오답인 단어는 더 자주 나와요. 제한 없음으로 두면 다 쓸 때까지 오답이 되지 않아요.</p>
+      <div class="range-row">
+        <input type="range" id="wrmiss" min="0" max="20" step="1" value="${+st.wrMiss || 0}" aria-label="오답 기준 획 수">
+        <span class="range-val" id="wrmiss-val">${+st.wrMiss ? (+st.wrMiss) + '획' : '제한 없음'}</span>
+      </div>
+      <p class="help" style="margin-top:8px">정한 획 수만큼 틀리면 정답 획순을 보여주고 오답으로 쳐요. 오답인 단어는 더 자주 나와요. 맨 왼쪽까지 내리면 제한 없음이 되고, 다 쓸 때까지 오답이 되지 않아요.</p>
       <div class="set-row" style="margin-top:16px"><h3 style="margin:0">획 방향 느슨하게</h3>
         <button type="button" class="switch" role="switch" data-set="backstroke" aria-checked="${!!st.backStroke}" aria-label="획 방향 느슨하게"></button></div>
       <p class="help" style="margin-top:6px">켜면 획을 반대 방향으로 그어도 맞은 것으로 쳐요. 삼수변의 세 번째 획처럼 아래에서 위로 올려야 하는 획을 위에서 아래로 그어도 통과해요.</p>
@@ -1774,7 +1854,7 @@ function openSettings() {
       </ul>
     </div>
     <div class="set-block"><h3>문장 퀴즈</h3>
-      <p class="help">문장은 품사가 명사, 동사, 형용사인 단어로 만들어요. 새 단어는 뜻을 찾을 때 품사도 함께 채우고, 비어 있는 단어는 아래 버튼으로 한꺼번에 채울 수 있어요. 지금 품사가 빈 단어는 ${S.words.filter(w => w.mean && !POS_KIND(w.pos)).length}개예요.</p>
+      <p class="help">문장은 품사가 명사, 동사, 형용사인 단어로 만들어요. 한 단어가 여러 품사로 쓰이면 모두 저장해서 문형도 그만큼 다양해져요. 지금 문장에 쓸 수 없는 단어는 ${S.words.filter(w => w.mean && !POS_KINDS(w.pos).length).length}개예요.</p>
       <div class="btn-row"><button type="button" class="btn ghost sm" data-set="fillpos">품사 자동으로 채우기</button></div>
     </div>
     <div class="set-block"><h3>백업</h3>
@@ -1795,7 +1875,6 @@ async function onSettingsAction(b) {
   if (act === 'len') { S.settings.len = +b.dataset.v; touchSettings(); openSettings(); return; }
   if (act === 'method') { S.settings.spMethod = b.dataset.v; if (b.dataset.v === 'auto') srBlocked = false; touchSettings(); if (sessions.sp && sessions.sp.phase === 'ask') { sessions.sp.method = spMethod(); renderQuiz('sp'); } openSettings(); return; }
   if (act === 'speak') { S.settings.autoSpeak = !S.settings.autoSpeak; touchSettings(); b.setAttribute('aria-checked', String(S.settings.autoSpeak)); return; }
-  if (act === 'wrmiss') { S.settings.wrMiss = +b.dataset.v; touchSettings(); openSettings(); return; }
   if (act === 'backstroke') { S.settings.backStroke = !S.settings.backStroke; touchSettings(); b.setAttribute('aria-checked', String(S.settings.backStroke)); return; }
   if (act === 'fillpos') { fillPos(true); return; }
   if (act === 'wrmethod') { S.settings.wrMethod = b.dataset.v; touchSettings(); openSettings(); return; }
@@ -1874,6 +1953,13 @@ function bind() {
     $('#ed-preview').innerHTML = ruby(w.hz, parsePyInput(e.target.value, w.hz));
   });
   $('#btn-settings').addEventListener('click', openSettings);
+  $('#dlg-settings').addEventListener('input', e => {
+    if (e.target.id !== 'wrmiss') return;
+    const v = +e.target.value || 0;
+    S.settings.wrMiss = v;
+    touchSettings();
+    const lab = $('#wrmiss-val'); if (lab) lab.textContent = v ? v + '획' : '제한 없음';
+  });
   $('#dlg-settings').addEventListener('click', e => {
     if (e.target === e.currentTarget) { e.currentTarget.close(); return; }
     const b = e.target.closest('[data-set]'); if (b) onSettingsAction(b);
@@ -1902,7 +1988,13 @@ if (!storageOK) toast('이 브라우저에서는 단어장이 저장되지 않�
     setTimeout(() => toast('백업한 지 한 달이 넘었어요.', { label: '지금 백업', fn: exportBackup }), 1500);
   }
 })();
-setTimeout(() => { if (navigator.onLine !== false) fillPos(false); }, 4000);
+/* 뜻이나 품사가 비어 있는 단어를 조용히 채워요 */
+setTimeout(async () => {
+  if (navigator.onLine === false) return;
+  const noMean = S.words.filter(w => !w.mean).slice(0, 10);
+  if (noMean.length) await lookup(noMean, true);
+  fillPos(false);
+}, 3000);
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 }
