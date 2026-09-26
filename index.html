@@ -180,6 +180,7 @@ select{ appearance:none; padding-right:30px;
 .prompt{ text-align:center; padding:26px 0 6px; }
 .pos{ font-size:13px; color:var(--muted); min-height:20px; }
 .mean{ font-size:29px; line-height:1.35; margin-top:2px; overflow-wrap:anywhere; }
+.mean.sent{ font-size:23px; line-height:1.45; }
 .slots{ display:flex; justify-content:center; align-items:center; margin-top:14px; }
 .slots .gz{ --s:30px; }
 .slots-n{ font-size:13px; color:var(--muted); margin-left:10px; }
@@ -245,7 +246,7 @@ select{ appearance:none; padding-right:30px;
 .ans-mean{ font-size:16px; color:var(--muted); margin-top:-4px; }
 .verdict{ text-align:center; font-size:16px; margin-top:12px; }
 .verdict.no{ color:var(--pen); }
-.mark-svg{ position:absolute; pointer-events:none; overflow:visible; transform:rotate(-2deg); }
+.mark-svg{ position:absolute; pointer-events:none; overflow:visible; max-width:none; max-height:none; transform:rotate(-2deg); }
 .mark-svg path{ fill:none; stroke:var(--pen); stroke-width:3.6; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:1; stroke-dashoffset:1; animation:draw .55s cubic-bezier(.5,.1,.35,1) .08s forwards; }
 @keyframes draw{ to{ stroke-dashoffset:0; } }
 
@@ -288,7 +289,7 @@ select{ appearance:none; padding-right:30px;
   background:var(--surface); border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
-.nav-in{ max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(3,1fr); }
+.nav-in{ max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); }
 .nav button{
   appearance:none; background:none; border:0; cursor:pointer; position:relative;
   min-height:62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
@@ -404,6 +405,7 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
 
   <section class="view" data-view="sp" id="sp-root" hidden></section>
   <section class="view" data-view="wr" id="wr-root" hidden></section>
+  <section class="view" data-view="sn" id="sn-root" hidden></section>
 </main>
 
 <nav class="nav" aria-label="메뉴">
@@ -419,6 +421,10 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
     <button type="button" data-go="wr" aria-current="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c3-.5 5-2 6.5-3.5L19 8a2.1 2.1 0 0 0-3-3l-8.5 8.5C6 15 4.5 17 4 20z"/><path d="M14.5 6.5l3 3"/></svg>
       <span>쓰기</span>
+    </button>
+    <button type="button" data-go="sn" aria-current="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6.5h16M4 12h16M4 17.5h10"/></svg>
+      <span>문장</span>
     </button>
   </div>
 </nav>
@@ -494,7 +500,7 @@ async function fromMyMemory(hz) {
 
 /* ───────── 저장소: 이 휴대폰(브라우저)에 저장 ───────── */
 const stat = () => ({ w: 1, n: 0, seen: 0, ok1: 0, ok2: 0, miss: 0, last: 0 });
-const defaults = () => ({ v: 1, words: [], settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', lastBackup: 0, lastNag: 0 } });
+const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', lastBackup: 0, lastNag: 0 } });
 let S = defaults();
 let storageOK = true;
 const R = { state: 'local' };
@@ -512,6 +518,7 @@ function normWord(w) {
     st: (w.st === 'pending' || !w.st) ? (w.mean ? 'done' : 'failed') : String(w.st),
     sp: { ...stat(), ...(w.sp || {}) },
     wr: { ...stat(), ...(w.wr || {}) },
+    sn: { ...stat(), ...(w.sn || {}) },
   };
 }
 function load() {
@@ -520,7 +527,7 @@ function load() {
     if (!raw) return;
     const d = JSON.parse(raw);
     if (d && Array.isArray(d.words)) {
-      S = { ...defaults(), settings: { ...defaults().settings, ...(d.settings || {}) }, words: d.words.map(normWord).filter(Boolean) };
+      S = { ...defaults(), settings: { ...defaults().settings, ...(d.settings || {}) }, sents: (d.sents && typeof d.sents === 'object') ? d.sents : {}, words: d.words.map(normWord).filter(Boolean) };
     }
   } catch (e) { storageOK = false; }
 }
@@ -780,6 +787,7 @@ function tagsHTML(w) {
   else if (w.sp.w < 1) t.push('<span class="tag new">말하기 쉬움</span>');
   if (w.wr.w > 1) t.push(`<span class="tag">쓰기 복습 ${w.wr.n}/3</span>`);
   else if (w.wr.w < 1) t.push('<span class="tag new">쓰기 쉬움</span>');
+  if (w.sn.w > 1) t.push(`<span class="tag">문장 복습 ${w.sn.n}/3</span>`);
   return t.join('');
 }
 const toneless = w => (w.py || []).join('').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -885,7 +893,7 @@ function openEdit(id) {
     <label class="field"><span>한국어 뜻</span><input type="text" id="ed-mean" value="${esc(w.mean)}" placeholder="예: 안녕하세요, 안녕"></label>
     <label class="field"><span>병음 <small>음절마다 띄어 써요. ni3 hao3처럼 숫자로 써도 돼요.</small></span><input type="text" id="ed-py" value="${esc(w.py.join(' '))}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
     <label class="field"><span>품사</span><input type="text" id="ed-pos" value="${esc(w.pos)}" placeholder="예: 동사"></label>
-    <table class="rec"><caption>학습 기록</caption><tbody>${recRow('말하기', w.sp)}${recRow('쓰기', w.wr)}</tbody></table>
+    <table class="rec"><caption>학습 기록</caption><tbody>${recRow('말하기', w.sp)}${recRow('쓰기', w.wr)}${recRow('문장', w.sn)}</tbody></table>
     <button type="button" class="link" data-ed="resetrec">이 단어 기록 초기화</button>
     <div class="dlg-foot"><button type="button" class="btn danger-ghost" data-ed="delete">삭제</button><button type="button" class="btn primary" data-ed="save">저장</button></div>
   </div>`;
@@ -918,7 +926,7 @@ async function onEditAction(act) {
   }
   if (act === 'resetrec') {
     if (!(await askConfirm(`${w.hz}의 말하기와 쓰기 기록을 처음으로 돌릴까요?`, '초기화'))) return;
-    w.sp = stat(); w.wr = stat(); touch(w); openEdit(w.id); renderWords();
+    w.sp = stat(); w.wr = stat(); w.sn = stat(); touch(w); openEdit(w.id); renderWords();
     return;
   }
   if (act === 'delete') {
@@ -929,13 +937,97 @@ async function onEditAction(act) {
 }
 
 /* ───────── 퀴즈 공통 ───────── */
-const sessions = { sp: null, wr: null };
-const MODE_NAME = { sp: '말하기', wr: '쓰기' };
+const sessions = { sp: null, wr: null, sn: null };
+const MODE_NAME = { sp: '말하기', wr: '쓰기', sn: '문장' };
+const isWrite = m => m === 'wr' || m === 'sn';
+const itemOf = sess => (sess.mode === 'sn' ? sess.item : byId(sess.cur));
+
+/* 문장 만들기: 초급 문형에 단어장 단어를 끼워 넣어요 */
+const hasJong = t => { const c = String(t).trim().slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : false; };
+const jo = (t, withJong, without) => t + (hasJong(t) ? withJong : without);
+const addJong = (t, idx) => { const c = t.charCodeAt(t.length - 1); return (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 === 0) ? t.slice(0, -1) + String.fromCharCode(c + idx) : t; };
+const m1 = w => String(w.mean || '').split(/[,，/]/)[0].trim();
+const stemOf = w => { const m = m1(w); return m.endsWith('다') ? m.slice(0, -1) : null; };
+const POS_KIND = p => {
+  const t = String(p || '');
+  if (/형용사|adjective/i.test(t)) return 'a';
+  if (/동사|verb/i.test(t)) return 'v';
+  if (/대명사|pronoun/i.test(t)) return '';
+  if (/명사|noun/i.test(t)) return 'n';
+  return '';
+};
+const TPL = [
+  { k: 'n', zh: x => `这是${x}。`, ko: w => `이것은 ${jo(m1(w), '이에요', '예요')}.` },
+  { k: 'n', zh: x => `这是我的${x}。`, ko: w => `이것은 제 ${jo(m1(w), '이에요', '예요')}.` },
+  { k: 'n', zh: x => `我有${x}。`, ko: w => `저는 ${jo(m1(w), '이', '가')} 있어요.` },
+  { k: 'n', zh: x => `我没有${x}。`, ko: w => `저는 ${jo(m1(w), '이', '가')} 없어요.` },
+  { k: 'n', zh: x => `我喜欢${x}。`, ko: w => `저는 ${jo(m1(w), '을', '를')} 좋아해요.` },
+  { k: 'n', zh: x => `我不喜欢${x}。`, ko: w => `저는 ${jo(m1(w), '을', '를')} 안 좋아해요.` },
+  { k: 'n', zh: x => `我要${x}。`, ko: w => `저는 ${jo(m1(w), '을', '를')} 원해요.` },
+  { k: 'n', zh: x => `${x}在哪儿？`, ko: w => `${jo(m1(w), '은', '는')} 어디에 있어요?` },
+  { k: 'v', zh: x => `我想${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}고 싶어요.` : `저는 ${m1(w)} 하고 싶어요.`; } },
+  { k: 'v', zh: x => `我不${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}지 않아요.` : `저는 ${m1(w)} 안 해요.`; } },
+  { k: 'v', zh: x => `你${x}吗？`, ko: w => { const st = stemOf(w); return st ? `당신은 ${st}나요?` : `${m1(w)} 하나요?`; } },
+  { k: 'v', zh: x => `我会${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${addJong(st, 8)} 수 있어요.` : `저는 ${m1(w)} 할 수 있어요.`; } },
+  { k: 'v', zh: x => `我们${x}吧。`, ko: w => { const st = stemOf(w); return st ? `우리 같이 ${addJong(st, 17)}시다.` : `우리 같이 ${m1(w)} 해요.`; } },
+  { k: 'a', zh: x => `今天很${x}。`, ko: w => { const st = stemOf(w); return st ? `오늘은 ${st}네요.` : `오늘은 ${m1(w)}.`; } },
+  { k: 'a', zh: x => `我很${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}네요.` : `저는 ${m1(w)}.`; } },
+  { k: 'a', zh: x => `这个很${x}。`, ko: w => { const st = stemOf(w); return st ? `이건 ${st}네요.` : `이건 ${m1(w)}.`; } },
+];
+function makeSentence(w, avoid) {
+  const k = POS_KIND(w.pos);
+  if (!k) return null;
+  let c = TPL.map((t, i) => ({ t, i })).filter(o => o.t.k === k);
+  if (!c.length) return null;
+  const fresh = c.filter(o => o.i !== avoid);
+  if (fresh.length) c = fresh;
+  const got = c[Math.floor(Math.random() * c.length)];
+  return { zh: got.t.zh(w.hz), tpl: got.i };
+}
+function trimSents() {
+  const keys = Object.keys(S.sents || {});
+  if (keys.length > 400) keys.slice(0, keys.length - 300).forEach(k => { delete S.sents[k]; });
+}
+async function sentenceKo(zh, tpl, w) {
+  if (S.sents && S.sents[zh]) return S.sents[zh];
+  if (navigator.onLine !== false) {
+    try {
+      const r = (await fromGoogle(zh)) || (await fromMyMemory(zh));
+      if (r && r.mean) {
+        S.sents = S.sents || {};
+        S.sents[zh] = r.mean;
+        trimSents(); save();
+        return r.mean;
+      }
+    } catch (e) {}
+  }
+  try { return TPL[tpl].ko(w); } catch (e) { return zh; }
+}
+function prepareSentence(sess, w) {
+  const made = makeSentence(w, sess.lastTpl);
+  if (!made) { sess.item = null; sess.loading = false; return; }
+  sess.lastTpl = made.tpl;
+  sess.zh = made.zh;
+  sess.item = null; sess.loading = true;
+  const hz = onlyHan(made.zh);
+  sess.strokes = chars(hz).map(() => []);
+  const wid = w.id, zh = made.zh;
+  sentenceKo(zh, made.tpl, w).then(ko => {
+    if (sessions.sn !== sess || sess.cur !== wid || sess.zh !== zh) return;
+    sess.item = { id: wid + '|' + zh, hz, py: pyArr(hz), mean: ko, pos: '', full: zh };
+    sess.loading = false;
+    if (sess.phase === 'ask') renderQuiz('sn');
+  });
+}
 function newSession(mode) {
   return { mode, total: S.settings.len, idx: 0, results: [], recent: [], skipped: new Set(), passed: 0, cur: null, phase: 'ask', self: false, auto: false };
 }
+function poolFor(mode) {
+  const base = eligible();
+  return mode === 'sn' ? base.filter(w => POS_KIND(w.pos)) : base;
+}
 function pick(mode, sess) {
-  const pool = eligible();
+  const pool = poolFor(mode);
   if (!pool.length) return null;
   const win = Math.min(3, pool.length - 1);
   const recent = win > 0 ? sess.recent.slice(-win) : [];
@@ -951,15 +1043,17 @@ function pick(mode, sess) {
 }
 function loadQuestion(sess) {
   const w = pick(sess.mode, sess);
-  if (sess.mode === 'wr') stopWriters(sess);
+  if (isWrite(sess.mode)) stopWriters(sess);
   if (!w) { sess.phase = (sess.results.length || sess.passed) ? 'summary' : 'start'; return; }
   Object.assign(sess, {
     padsEl: null, padsFor: null, writers: [], doneChars: new Set(), hwFail: false, animated: false,
     cur: w.id, phase: 'ask', fails: 0, outcome: null, gaveUp: false, heard: null, msg: null, hint: null,
     notes: null, bad: null, busy: false, listening: false, snap: null, reset: false, offerSelf: false,
-    strokes: chars(w.hz).map(() => []), hist: [],
+    strokes: [], hist: [], item: null, loading: false, zh: null,
   });
   sess.recent.push(w.id);
+  if (sess.mode === 'sn') prepareSentence(sess, w);
+  else sess.strokes = chars(w.hz).map(() => []);
 }
 /* 출제 빈도 규칙
    한 번에 정답: 한 번에 맞힌 횟수 +1, 3번이 되면 빈도를 처음(1)으로
@@ -981,7 +1075,7 @@ function record(w, mode, outcome) {
 function skipQuestion(sess) {
   const w = byId(sess.cur); if (!w) return;
   abortListening(); sess.listening = false;
-  if (sess.mode === 'wr') stopWriters(sess);
+  if (isWrite(sess.mode)) stopWriters(sess);
   record(w, sess.mode, 'pass');
   sess.skipped.add(w.id);
   sess.passed++;
@@ -992,12 +1086,13 @@ function skipQuestion(sess) {
 function finish(sess, outcome) {
   const w = byId(sess.cur); if (!w) return;
   abortListening(); sess.listening = false; sess.busy = false;
-  if (sess.mode === 'wr') stopWriters(sess);
+  if (isWrite(sess.mode)) stopWriters(sess);
   const r = record(w, sess.mode, outcome);
   Object.assign(sess, { snap: r.before, reset: r.reset, outcome, phase: 'reveal' });
   sess.results.push({ id: w.id, outcome });
+  const it = itemOf(sess) || w;
   renderQuiz(sess.mode);
-  if (S.settings.autoSpeak) setTimeout(() => { if (sessions[sess.mode] === sess && sess.cur === w.id) speak(w.hz); }, 350);
+  if (S.settings.autoSpeak) setTimeout(() => { if (sessions[sess.mode] === sess && sess.cur === w.id) speak(it.hz); }, 350);
 }
 function override(sess) {
   const w = byId(sess.cur); if (!w) return;
@@ -1037,15 +1132,20 @@ function renderQuiz(mode) {
   const sess = sessions[mode];
   if (!sess || sess.phase === 'start') { renderStart(mode, root); return; }
   if (sess.phase === 'summary') { renderSummary(mode, root, sess); return; }
-  let w = byId(sess.cur);
-  if (!w && sess.phase !== 'reveal') { loadQuestion(sess); if (sess.phase !== 'ask') { renderQuiz(mode); return; } w = byId(sess.cur); }
-  if (!w) { sess.idx++; if (sess.idx >= sess.total) sess.phase = 'summary'; else loadQuestion(sess); renderQuiz(mode); return; }
+  let real = byId(sess.cur);
+  if (!real && sess.phase !== 'reveal') { loadQuestion(sess); if (sess.phase !== 'ask') { renderQuiz(mode); return; } real = byId(sess.cur); }
+  if (!real) { sess.idx++; if (sess.idx >= sess.total) sess.phase = 'summary'; else loadQuestion(sess); renderQuiz(mode); return; }
+  const w = mode === 'sn' ? sess.item : real;
+  if (!w) {
+    root.innerHTML = quizTop(sess) + `<div class="start"><p class="lead">${sess.loading ? '문장을 만드는 중이에요…' : '이 단어로는 문장을 만들지 못했어요.'}</p>${sess.loading ? '' : '<button type="button" class="btn primary big" data-act="next">다음 문제</button>'}</div>`;
+    return;
+  }
 
   root.innerHTML = quizTop(sess) + promptHTML(w, mode) + (mode === 'sp' ? triesHTML(sess) : wrTries(sess)) + (mode === 'sp' ? speakStage(sess, w) : writeStage(sess, w));
-  if (mode === 'wr') mountPads(sess, w);
+  if (isWrite(mode)) mountPads(sess, w);
   const ah = root.querySelector('.ans-han[data-mark="circle"]');
   if (ah) drawMark(ah, 'circle');
-  if (mode === 'wr' && sess.phase === 'reveal') {
+  if (isWrite(mode) && sess.phase === 'reveal') {
     const pi = root.querySelector('.pads-in');
     if (pi) {
       if (sess.outcome !== 'miss') drawMark(pi, 'circle');
@@ -1066,7 +1166,7 @@ function promptHTML(w, mode) {
   const slots = mode === 'sp'
     ? `<div class="slots" aria-label="${n}글자">${'<span class="gz" aria-hidden="true"></span>'.repeat(Math.min(n, 8))}<span class="slots-n">${n}글자</span></div>`
     : `<p class="slots-n solo">${n}글자</p>`;
-  return `<div class="prompt"><p class="pos">${esc(w.pos)}</p><p class="mean">${esc(w.mean)}</p>${slots}</div>`;
+  return `<div class="prompt"><p class="pos">${esc(w.pos)}</p><p class="mean${mode === 'sn' ? ' sent' : ''}">${esc(w.mean)}</p>${slots}</div>`;
 }
 function wrTries(sess) {
   if (!useHW(sess)) return '';
@@ -1090,16 +1190,17 @@ function heardHTML(h, pass) {
   return `<p class="heard"><span class="heard-label">들린 발음</span><span class="han" lang="zh-CN">${esc(h.text || '—')}</span>${h.py ? `<span class="py">${esc(h.py)}</span>` : ''}<span class="pct ${pass ? 'ok' : 'no'}">${Math.round(h.score * 100)}%</span></p>`;
 }
 function verdictText(sess, w) {
-  const s = w[sess.mode];
+  const rw = byId(sess.cur) || w;
+  const s = rw[sess.mode] || { w: 1, n: 0 };
   if (sess.outcome === 'first') {
     if (sess.reset) return '한 번에 맞혔어요. 이 단어는 이제 평소만큼 나와요.';
     return s.w > 1 ? `한 번에 맞혔어요. 복습 단어라 한 번에 맞힌 횟수 ${s.n}/3이에요.` : '한 번에 맞혔어요.';
   }
   if (sess.outcome === 'retry') {
-    if (sess.mode === 'wr' && useHW(sess)) return `틀린 획을 고쳐서 다 썼어요. 조금 더 자주 나올 거예요.`;
+    if (isWrite(sess.mode) && useHW(sess)) return `틀린 획을 고쳐서 다 썼어요. 조금 더 자주 나올 거예요.`;
     return `${sess.fails + 1}번째에 맞혔어요. 조금 더 자주 나올 거예요.`;
   }
-  if (sess.mode === 'wr' && useHW(sess)) return '정답 획순이에요. 한 번 따라 써 보고 넘어가요.';
+  if (isWrite(sess.mode) && useHW(sess)) return '정답 획순이에요. 한 번 따라 써 보고 넘어가요.';
   return sess.gaveUp ? '다음에 더 자주 나올 거예요. 발음을 들어 보고 넘어가요.' : '이번에는 놓쳤어요. 앞으로 더 자주 나올 거예요.';
 }
 function revealBlock(sess, w, circleOnAnswer) {
@@ -1251,17 +1352,17 @@ function writeStage(sess, w) {
     ${window.HanziWriter && sess.hwFail !== 'data' ? '<div class="stage-links"><button type="button" class="link" data-act="use-hw">획순 채점으로 하기</button></div>' : ''}`;
 }
 function patchWrite(sess) {
-  const root = $('#wr-root');
+  const root = $(`#${sess.mode}-root`);
   const t = root.querySelector('.mist'); if (t) t.outerHTML = wrTries(sess);
-  const fb = $('#wr-fb'); if (fb) fb.innerHTML = wrFeedback(sess);
+  const fb = root.querySelector('#wr-fb'); if (fb) fb.innerHTML = wrFeedback(sess);
 }
 const cssVar = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
 const inkColor = () => cssVar('--ink', '#1E2A26');
 let lastPadWidth = 0;
 function padSize(n) {
   const avail = Math.max(200, ($('#main').clientWidth || 360) - 40);
-  const per = Math.min(n, 4);
-  const cap = n === 1 ? 210 : n === 2 ? 168 : 140;
+  const per = Math.min(n, n > 4 ? 5 : 4);
+  const cap = n === 1 ? 210 : n === 2 ? 168 : n <= 4 ? 140 : 112;
   return Math.max(64, Math.min(cap, Math.floor((avail + 1.5 * (per - 1)) / per)));
 }
 function mountPads(sess, w) {
@@ -1314,8 +1415,8 @@ function mountHW(sess, w) {
 }
 function stopWriters(sess) { (sess.writers || []).forEach(wr => { try { wr.cancelQuiz(); } catch (e) {} }); }
 function onHwMistake(sess, wid) {
-  if (sessions.wr !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
-  const w = byId(wid); if (!w) return;
+  if (sessions[sess.mode] !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
+  const w = itemOf(sess); if (!w) return;
   sess.fails++;
   sess.msg = sess.fails === 1 ? '획이 달라요. 다시 그어 보세요.' : `획이 달라요. 다시 그어 보세요. (지금까지 ${sess.fails}번)`;
   sess.msgCalm = false;
@@ -1323,26 +1424,26 @@ function onHwMistake(sess, wid) {
   patchWrite(sess);
 }
 function onHwChar(sess, wid, i, n) {
-  if (sessions.wr !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
+  if (sessions[sess.mode] !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
   sess.doneChars.add(i);
   if (sess.doneChars.size >= n) setTimeout(() => {
-    if (sessions.wr === sess && sess.cur === wid && sess.phase === 'ask') finish(sess, sess.fails === 0 ? 'first' : 'retry');
+    if (sessions[sess.mode] === sess && sess.cur === wid && sess.phase === 'ask') finish(sess, sess.fails === 0 ? 'first' : 'retry');
   }, 350);
 }
 function hwFailed(sess, wid, why) {
-  if (sessions.wr !== sess || sess.cur !== wid || sess.hwFail) return;
+  if (sessions[sess.mode] !== sess || sess.cur !== wid || sess.hwFail) return;
   sess.hwFail = why;
   stopWriters(sess);
   sess.padsEl = null; sess.writers = [];
   if (sess.phase !== 'ask') return;
   sess.msg = why === 'data' ? '이 글자의 획순 정보를 받지 못했어요. 인터넷 연결을 확인해 주세요. 이번 문제는 직접 쓰고 스스로 채점해요.' : null;
   sess.msgCalm = true;
-  renderQuiz('wr');
+  renderQuiz(sess.mode);
 }
 async function animateAnswer(sess) {
   const list = sess.writers || [];
   for (const wr of list) {
-    if (sessions.wr !== sess || sess.phase !== 'reveal') return;
+    if (sessions[sess.mode] !== sess || sess.phase !== 'reveal') return;
     await new Promise(res => {
       try { wr.hideCharacter(); wr.animateCharacter({ onComplete: res }); } catch (e) { res(); }
       setTimeout(res, 6000);
@@ -1403,9 +1504,9 @@ function setupCanvas(cv, i, size, sess, editable) {
 }
 function submitWriting(sess) {
   if (!sess || sess.phase !== 'ask') return;
-  const w = byId(sess.cur); if (!w) return;
-  if (!sess.strokes || !sess.strokes.some(st => st.length)) { sess.msg = '칸에 글자를 써 주세요.'; sess.msgCalm = true; renderQuiz('wr'); return; }
-  sess.phase = 'selfcheck'; renderQuiz('wr');
+  const w = itemOf(sess); if (!w) return;
+  if (!sess.strokes || !sess.strokes.some(st => st.length)) { sess.msg = '칸에 글자를 써 주세요.'; sess.msgCalm = true; renderQuiz(sess.mode); return; }
+  sess.phase = 'selfcheck'; renderQuiz(sess.mode);
   if (S.settings.autoSpeak) speak(w.hz);
 }
 
@@ -1432,43 +1533,63 @@ function circlePath(cx, cy, rx, ry) {
 }
 const slashPath = (W, H) => `M${(W * 0.14).toFixed(1)} ${(H * 0.9).toFixed(1)} Q${(W * 0.52).toFixed(1)} ${(H * 0.46).toFixed(1)} ${(W * 0.86).toFixed(1)} ${(H * 0.1).toFixed(1)}`;
 function drawMark(host, kind) {
-  const r = host.getBoundingClientRect();
-  if (!r.width) return;
-  let W, H, left, top, d;
-  if (kind === 'circle') {
-    const vw = document.documentElement.clientWidth;
-    const py = Math.min(42, Math.min(r.width, r.height) * 0.2 + 10);
-    let px = py;
-    px = Math.max(4, Math.min(px, r.left - 8, vw - r.right - 8));
-    const rx = r.width / 2 + px, ry = r.height / 2 + py, m = 4;
-    W = 2 * (rx + m); H = 2 * (ry + m); left = -(px + m); top = -(py + m);
-    d = circlePath(W / 2, H / 2, rx, ry);
-  } else {
-    W = r.width + 8; H = r.height + 8; left = -4; top = -4;
-    d = slashPath(W, H);
-  }
-  host.insertAdjacentHTML('beforeend', `<svg class="mark-svg" width="${W.toFixed(1)}" height="${H.toFixed(1)}" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px" aria-hidden="true"><path pathLength="1" d="${d}"/></svg>`);
+  const paint = () => {
+    const old = host.querySelector('.mark-svg');
+    if (old) old.remove();
+    const r = host.getBoundingClientRect();
+    if (!r.width) return;
+    let W, H, left, top, d;
+    if (kind === 'circle') {
+      const vw = document.documentElement.clientWidth;
+      const py = Math.min(42, Math.min(r.width, r.height) * 0.2 + 10);
+      let px = py;
+      px = Math.max(4, Math.min(px, r.left - 8, vw - r.right - 8));
+      const rx = r.width / 2 + px, ry = r.height / 2 + py, m = 4;
+      W = 2 * (rx + m); H = 2 * (ry + m); left = -(px + m); top = -(py + m);
+      d = circlePath(W / 2, H / 2, rx, ry);
+    } else {
+      W = r.width + 8; H = r.height + 8; left = -4; top = -4;
+      d = slashPath(W, H);
+    }
+    host.insertAdjacentHTML('beforeend', `<svg class="mark-svg" width="${W.toFixed(1)}" height="${H.toFixed(1)}" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px" aria-hidden="true"><path pathLength="1" d="${d}"/></svg>`);
+  };
+  paint();
+  /* 글꼴이 늦게 불러와지면 글자 크기가 바뀌므로 다 불러온 뒤 다시 그림 */
+  try {
+    if (document.fonts && document.fonts.status !== 'loaded') {
+      document.fonts.ready.then(() => { if (host.isConnected) paint(); }).catch(() => {});
+    }
+  } catch (e) {}
 }
 
 /* 시작 화면 */
 function renderStart(mode, root) {
-  const pool = eligible();
+  const pool = poolFor(mode);
   const title = `${MODE_NAME[mode]} 퀴즈`;
   if (R.state === 'loading') {
     root.innerHTML = `<div class="start"><h2>${title}</h2><p class="lead">저장된 단어장을 불러오고 있어요…</p></div>`;
     return;
   }
   if (!pool.length) {
+    const why = mode === 'sn'
+      ? (eligible().length
+        ? '문장을 만들려면 품사가 명사, 동사, 형용사인 단어가 필요해요. 단어장에서 단어를 눌러 품사를 채워 주세요.'
+        : '단어장에 단어를 넣으면 그 단어로 문장을 만들어요.')
+      : '퀴즈에 낼 단어가 아직 없어요. 단어장에 단어를 넣으면 그 단어로 문제가 나와요.';
     root.innerHTML = `<div class="start"><h2>${title}</h2>
-      <p class="lead">퀴즈에 낼 단어가 아직 없어요. 단어장에 단어를 넣으면 그 단어로 문제가 나와요.</p>
-      <button type="button" class="btn primary big" data-act="towords">단어 넣으러 가기</button></div>`;
+      <p class="lead">${why}</p>
+      <button type="button" class="btn primary big" data-act="towords">단어장으로 가기</button></div>`;
     return;
   }
   const weak = pool.filter(w => w[mode].w > 1).length;
   const desc = mode === 'sp'
     ? '한국어 뜻을 보고 중국어로 말해요. 기회는 세 번이에요.'
-    : '한국어 뜻을 보고 칸에 간체로 써요. 기회는 세 번이에요.';
-  const pool2 = `단어 ${pool.length}개에서 나와요.` + (weak ? ` 복습 중인 ${weak}개는 더 자주 나와요.` : '');
+    : mode === 'sn'
+      ? '단어장 단어로 만든 짧은 문장이 나와요. 한국어 뜻을 보고 중국어 문장을 써요.'
+      : '한국어 뜻을 보고 칸에 간체로 써요.';
+  const pool2 = mode === 'sn'
+    ? `품사가 적힌 단어 ${pool.length}개로 문장을 만들어요.` + (weak ? ` 복습 중인 ${weak}개는 더 자주 나와요.` : '')
+    : `단어 ${pool.length}개에서 나와요.` + (weak ? ` 복습 중인 ${weak}개는 더 자주 나와요.` : '');
   const m = spMethod();
   const note = mode === 'sp'
     ? (m === 'mic'
@@ -1476,9 +1597,10 @@ function renderStart(mode, root) {
       : m === 'kbd'
         ? `휴대폰 키보드의 마이크(받아쓰기)로 중국어를 말하면, 받아써진 한자를 병음으로 바꿔 채점해요. 정확도 ${S.settings.pass}% 이상이면 정답이에요.`
         : '소리 내어 말한 뒤 정답을 보고 스스로 채점해요. 설정에서 말하기 방법을 바꿀 수 있어요.')
-    : (window.HanziWriter && S.settings.wrMethod !== 'self'
+    : ((window.HanziWriter && S.settings.wrMethod !== 'self'
       ? '칸에 획순대로 한 획씩 쓰면 바로바로 채점해요. 틀려도 될 때까지 다시 그을 수 있고, 모르겠어요를 누르면 정답 획순을 보여줘요. 획순 정보는 인터넷에서 받아오고, 한 번 받은 글자는 인터넷이 없어도 돼요.'
-      : '칸에 직접 쓴 뒤 정답과 비교해 스스로 채점해요. 설정에서 획순 채점으로 바꿀 수 있어요.');
+      : '칸에 직접 쓴 뒤 정답과 비교해 스스로 채점해요. 설정에서 획순 채점으로 바꿀 수 있어요.')
+      + (mode === 'sn' ? ' 문장은 这是___, 我喜欢___ 같은 기본 문형에 단어를 넣어 만들어요. 어색한 문장은 건너뛰기를 누르면 돼요.' : ''));
   root.innerHTML = `<div class="start">
     <h2>${title}</h2>
     <p class="lead">${desc}</p>
@@ -1521,7 +1643,7 @@ function bindQuiz(mode) {
     if (!b || !root.contains(b) || b.disabled) return;
     const act = b.dataset.act;
     const sess = sessions[mode];
-    const w = sess && byId(sess.cur);
+    const w = sess && itemOf(sess);
     switch (act) {
       case 'towords': go('words'); setTimeout(() => $('#add-input').focus(), 50); break;
       case 'len': S.settings.len = +b.dataset.v; touchSettings(); renderQuiz(mode); break;
@@ -1588,7 +1710,7 @@ function openSettings() {
         <li>건너뛴 단어는 쉬운 단어로 보고 절반만큼만 나와요.</li>
         <li>복습 중인 단어를 한 번에 맞힌 횟수가 3번 쌓이면 원래대로 돌아가요.</li>
         <li>새로 넣은 단어는 처음 한 번 나올 때까지 조금 더 자주 나와요.</li>
-        <li>말하기와 쓰기는 따로 기록해요.</li>
+        <li>말하기, 쓰기, 문장은 따로 기록해요.</li>
       </ul>
     </div>
     <div class="set-block"><h3>백업</h3>
@@ -1614,8 +1736,8 @@ async function onSettingsAction(b) {
   if (act === 'import') { $('#file-import').click(); return; }
   if (act === 'resetall') {
     if (!(await askConfirm('모든 단어의 말하기와 쓰기 기록을 처음으로 돌릴까요? 단어는 그대로 남아요.', '초기화', true))) return;
-    S.words.forEach(w => { w.sp = stat(); w.wr = stat(); });
-    sessions.sp = null; sessions.wr = null;
+    S.words.forEach(w => { w.sp = stat(); w.wr = stat(); w.sn = stat(); });
+    sessions.sp = null; sessions.wr = null; sessions.sn = null;
     touch(...S.words); renderWords(); toast('학습 기록을 초기화했어요.');
   }
 }
@@ -1657,7 +1779,7 @@ async function importBackup(file) {
   if (!(await askConfirm(`백업에 있는 단어 ${words.length}개로 지금 단어장을 바꿀까요? 지금 단어장은 사라져요.`, '바꾸기', true))) return;
   S.words = words;
   if (d.settings) S.settings = { ...S.settings, ...d.settings };
-  sessions.sp = null; sessions.wr = null;
+  sessions.sp = null; sessions.wr = null; sessions.sn = null;
   touch(...words); touchSettings(); renderWords();
   const ds = $('#dlg-settings'); if (ds.open) ds.close();
   toast(`단어 ${words.length}개를 불러왔어요.`);
@@ -1691,13 +1813,13 @@ function bind() {
   });
   $('#dlg-backup').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
   $('#file-import').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) importBackup(f); });
-  bindQuiz('sp'); bindQuiz('wr');
+  bindQuiz('sp'); bindQuiz('wr'); bindQuiz('sn');
   let rt = null;
   addEventListener('resize', () => {
     clearTimeout(rt);
     rt = setTimeout(() => {
-      const s = sessions.wr;
-      if (view === 'wr' && s && !(useHW(s) && s.phase === 'ask') && ['ask', 'selfcheck', 'reveal'].includes(s.phase) && Math.abs($('#main').clientWidth - lastPadWidth) > 4) renderQuiz('wr');
+      const s = sessions[view];
+      if (isWrite(view) && s && !(useHW(s) && s.phase === 'ask') && ['ask', 'selfcheck', 'reveal'].includes(s.phase) && Math.abs($('#main').clientWidth - lastPadWidth) > 4) renderQuiz(view);
     }, 180);
   });
 }
