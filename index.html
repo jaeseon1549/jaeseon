@@ -489,6 +489,52 @@ async function fromGoogle(hz) {
   }
   return null;
 }
+const KO_ADJ = new Set(['좋다','나쁘다','크다','작다','많다','적다','높다','낮다','길다','짧다','넓다','좁다','덥다','춥다','뜨겁다','차갑다','맵다','짜다','달다','시다','비싸다','싸다','빠르다','느리다','새롭다','같다','다르다','쉽다','어렵다','젊다','어리다','늙다','멀다','가깝다','무겁다','가볍다','밝다','어둡다','두껍다','얇다','건강하다','행복하다','피곤하다','조용하다','시끄럽다','깨끗하다','더럽다','친절하다','편하다','불편하다','중요하다','필요하다','유명하다','간단하다','복잡하다','안전하다','위험하다','따뜻하다','시원하다','심심하다','특별하다','비슷하다','이상하다','신선하다','바쁘다','예쁘다','기쁘다','슬프다','아프다','배고프다','목마르다','귀엽다','맛있다','맛없다','재미있다','재미없다','멋있다','즐겁다']);
+const ADJ_TAIL = /(있다|없다|쁘다|프다|렵다|럽다|겁다|깝다|스럽다|롭다|답다|맑다|맞다)$/;
+const ADV_TAIL = /(히|이|게|로|씩|껏|만큼)$/;
+function guessPos(w) {
+  const m = m1(w);
+  if (!m) return '';
+  if (m.endsWith('다')) return (KO_ADJ.has(m) || ADJ_TAIL.test(m)) ? '형용사' : '동사';
+  if (ADV_TAIL.test(m)) return '';
+  if (/[가-힣]$/.test(m)) return '명사';
+  return '';
+}
+async function fetchPos(w) {
+  for (const tl of ['ko', 'en']) {
+    for (const client of ['gtx', 'at']) {
+      try {
+        const d = await fetchJSON(`https://translate.googleapis.com/translate_a/single?client=${client}&sl=zh-CN&tl=${tl}&hl=${tl}&dt=bd&q=${encodeURIComponent(w.hz)}`);
+        const e = Array.isArray(d && d[1]) ? d[1][0] : null;
+        const raw = (e && e[0]) ? String(e[0]).trim() : '';
+        if (!raw) continue;
+        const ko = POS_KO[raw.toLowerCase()] || (/[가-힣]/.test(raw) ? raw : '');
+        if (ko) return ko;
+      } catch (e) {}
+    }
+  }
+  return guessPos(w);
+}
+let posRunning = false;
+async function fillPos(manual) {
+  if (posRunning) return;
+  const todo = S.words.filter(w => w.mean && !POS_KIND(w.pos));
+  if (!todo.length) { if (manual) toast('문장에 쓸 품사가 모두 채워져 있어요.'); return; }
+  if (navigator.onLine === false) { if (manual) toast('인터넷에 연결된 뒤 다시 눌러 주세요.'); return; }
+  posRunning = true;
+  if (manual) toast(`단어 ${todo.length}개의 품사를 찾고 있어요…`);
+  let n = 0;
+  for (const w of todo.slice(0, manual ? 60 : 10)) {
+    if (!S.words.includes(w)) continue;
+    let p = '';
+    try { p = await fetchPos(w); } catch (e) { p = guessPos(w); }
+    if (p) { w.pos = clip(p, 8); n++; touch(w); }
+  }
+  posRunning = false;
+  if (n) { renderWords(); if (view === 'sn') renderQuiz('sn'); }
+  if (manual) toast(n ? `단어 ${n}개의 품사를 채웠어요.` : '품사를 찾지 못했어요. 단어를 눌러 직접 넣어 주세요.');
+}
+
 async function fromMyMemory(hz) {
   try {
     const d = await fetchJSON(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(hz)}&langpair=zh-CN|ko`);
@@ -500,7 +546,7 @@ async function fromMyMemory(hz) {
 
 /* ───────── 저장소: 이 휴대폰(브라우저)에 저장 ───────── */
 const stat = () => ({ w: 1, n: 0, seen: 0, ok1: 0, ok2: 0, miss: 0, last: 0 });
-const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', lastBackup: 0, lastNag: 0 } });
+const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', wrMiss: 5, backStroke: false, lastBackup: 0, lastNag: 0 } });
 let S = defaults();
 let storageOK = true;
 const R = { state: 'local' };
@@ -1174,7 +1220,7 @@ function wrTries(sess) {
   if (sess.phase === 'reveal') {
     if (sess.outcome === 'miss') t = '정답 획순이에요';
     else t = sess.fails ? `틀린 획 ${sess.fails}번` : '틀린 획 없이 완성';
-  } else if (sess.fails) t = `틀린 획 ${sess.fails}번`;
+  } else if (sess.fails) t = `틀린 획 ${sess.fails}번` + (+S.settings.wrMiss ? ` / ${+S.settings.wrMiss}` : '');
   return `<p class="mist">${t || '&nbsp;'}</p>`;
 }
 function triesHTML(sess) {
@@ -1200,7 +1246,9 @@ function verdictText(sess, w) {
     if (isWrite(sess.mode) && useHW(sess)) return `틀린 획을 고쳐서 다 썼어요. 조금 더 자주 나올 거예요.`;
     return `${sess.fails + 1}번째에 맞혔어요. 조금 더 자주 나올 거예요.`;
   }
-  if (isWrite(sess.mode) && useHW(sess)) return '정답 획순이에요. 한 번 따라 써 보고 넘어가요.';
+  if (isWrite(sess.mode) && useHW(sess)) return sess.gaveUp
+    ? '정답 획순이에요. 한 번 따라 써 보고 넘어가요.'
+    : `획을 ${sess.fails}번 틀려서 오답으로 했어요. 정답 획순을 따라 써 보고 넘어가요.`;
   return sess.gaveUp ? '다음에 더 자주 나올 거예요. 발음을 들어 보고 넘어가요.' : '이번에는 놓쳤어요. 앞으로 더 자주 나올 거예요.';
 }
 function revealBlock(sess, w, circleOnAnswer) {
@@ -1399,6 +1447,7 @@ function mountHW(sess, w) {
         strokeColor: ink, outlineColor: soft, drawingColor: ink, highlightColor: grid, highlightCompleteColor: grid,
         drawingWidth: Math.max(5, Math.round(size * 0.05)),
         showHintAfterMisses: 5, highlightOnComplete: true, leniency: 1.35,
+        acceptBackwardsStrokes: !!S.settings.backStroke,
         strokeAnimationSpeed: 1.3, delayBetweenStrokes: 160,
         onLoadCharDataError: () => hwFailed(sess, wid, 'data'),
       });
@@ -1418,9 +1467,11 @@ function onHwMistake(sess, wid) {
   if (sessions[sess.mode] !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
   const w = itemOf(sess); if (!w) return;
   sess.fails++;
-  sess.msg = sess.fails === 1 ? '획이 달라요. 다시 그어 보세요.' : `획이 달라요. 다시 그어 보세요. (지금까지 ${sess.fails}번)`;
+  const lim = +S.settings.wrMiss || 0;
+  if (lim && sess.fails >= lim) { finish(sess, 'miss'); return; }
+  sess.msg = '획이 달라요. 다시 그어 보세요.' + (lim ? ` (${sess.fails}/${lim})` : (sess.fails > 1 ? ` (지금까지 ${sess.fails}번)` : ''));
   sess.msgCalm = false;
-  if (sess.fails >= 3 && w.py.join('').trim()) sess.hint = w.py.join(' ');
+  if (sess.fails >= Math.min(3, lim ? lim - 1 : 3) && w.py.join('').trim()) sess.hint = w.py.join(' ');
   patchWrite(sess);
 }
 function onHwChar(sess, wid, i, n) {
@@ -1576,9 +1627,11 @@ function renderStart(mode, root) {
         ? '문장을 만들려면 품사가 명사, 동사, 형용사인 단어가 필요해요. 단어장에서 단어를 눌러 품사를 채워 주세요.'
         : '단어장에 단어를 넣으면 그 단어로 문장을 만들어요.')
       : '퀴즈에 낼 단어가 아직 없어요. 단어장에 단어를 넣으면 그 단어로 문제가 나와요.';
+    const canFill = mode === 'sn' && S.words.some(w => w.mean && !POS_KIND(w.pos));
     root.innerHTML = `<div class="start"><h2>${title}</h2>
       <p class="lead">${why}</p>
-      <button type="button" class="btn primary big" data-act="towords">단어장으로 가기</button></div>`;
+      ${canFill ? '<button type="button" class="btn primary big" data-act="fillpos">품사 자동으로 채우기</button>' : ''}
+      <button type="button" class="btn ${canFill ? 'ghost' : 'primary'} big" data-act="towords" style="margin-top:10px">단어장으로 가기</button></div>`;
     return;
   }
   const weak = pool.filter(w => w[mode].w > 1).length;
@@ -1598,7 +1651,7 @@ function renderStart(mode, root) {
         ? `휴대폰 키보드의 마이크(받아쓰기)로 중국어를 말하면, 받아써진 한자를 병음으로 바꿔 채점해요. 정확도 ${S.settings.pass}% 이상이면 정답이에요.`
         : '소리 내어 말한 뒤 정답을 보고 스스로 채점해요. 설정에서 말하기 방법을 바꿀 수 있어요.')
     : ((window.HanziWriter && S.settings.wrMethod !== 'self'
-      ? '칸에 획순대로 한 획씩 쓰면 바로바로 채점해요. 틀려도 될 때까지 다시 그을 수 있고, 모르겠어요를 누르면 정답 획순을 보여줘요. 획순 정보는 인터넷에서 받아오고, 한 번 받은 글자는 인터넷이 없어도 돼요.'
+      ? `칸에 획순대로 한 획씩 쓰면 바로바로 채점해요. ${+S.settings.wrMiss ? `획을 ${+S.settings.wrMiss}번 틀리면 오답으로 하고 정답 획순을 보여줘요.` : '틀려도 될 때까지 다시 그을 수 있어요.'} 기준과 획 방향 규칙은 설정에서 바꿀 수 있어요.`
       : '칸에 직접 쓴 뒤 정답과 비교해 스스로 채점해요. 설정에서 획순 채점으로 바꿀 수 있어요.')
       + (mode === 'sn' ? ' 문장은 这是___, 我喜欢___ 같은 기본 문형에 단어를 넣어 만들어요. 어색한 문장은 건너뛰기를 누르면 돼요.' : ''));
   root.innerHTML = `<div class="start">
@@ -1645,6 +1698,7 @@ function bindQuiz(mode) {
     const sess = sessions[mode];
     const w = sess && itemOf(sess);
     switch (act) {
+      case 'fillpos': fillPos(true); break;
       case 'towords': go('words'); setTimeout(() => $('#add-input').focus(), 50); break;
       case 'len': S.settings.len = +b.dataset.v; touchSettings(); renderQuiz(mode); break;
       case 'start': case 'again': startSession(mode, b); break;
@@ -1695,6 +1749,12 @@ function openSettings() {
     <div class="set-block"><h3>쓰기 채점 방법</h3>
       <div class="chips">${[['stroke', '획순 채점'], ['self', '스스로 채점']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmethod" data-v="${v}" aria-pressed="${(st.wrMethod || 'stroke') === v}">${l}</button>`).join('')}</div>
       <p class="help" style="margin-top:8px">획순 채점은 한 획씩 바로 확인해요. 획순이 틀려도 틀린 획으로 쳐요.</p>
+      <p class="field-label" style="margin-top:16px">몇 획 틀리면 오답으로 할까요</p>
+      <div class="chips">${[[3, '3획'], [5, '5획'], [10, '10획'], [0, '제한 없음']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmiss" data-v="${v}" aria-pressed="${(+st.wrMiss || 0) === v}">${l}</button>`).join('')}</div>
+      <p class="help" style="margin-top:8px">정한 횟수만큼 틀리면 정답 획순을 보여주고 오답으로 쳐요. 오답인 단어는 더 자주 나와요. 제한 없음으로 두면 다 쓸 때까지 오답이 되지 않아요.</p>
+      <div class="set-row" style="margin-top:16px"><h3 style="margin:0">획 방향 느슨하게</h3>
+        <button type="button" class="switch" role="switch" data-set="backstroke" aria-checked="${!!st.backStroke}" aria-label="획 방향 느슨하게"></button></div>
+      <p class="help" style="margin-top:6px">켜면 획을 반대 방향으로 그어도 맞은 것으로 쳐요. 삼수변의 세 번째 획처럼 아래에서 위로 올려야 하는 획을 위에서 아래로 그어도 통과해요.</p>
     </div>
     <div class="set-block"><h3>한 번에 푸는 문제 수</h3>
       <div class="chips">${[10, 20, 30].map(v => `<button type="button" class="chip" data-set="len" data-v="${v}" aria-pressed="${st.len === v}">${v}문제</button>`).join('')}</div>
@@ -1712,6 +1772,10 @@ function openSettings() {
         <li>새로 넣은 단어는 처음 한 번 나올 때까지 조금 더 자주 나와요.</li>
         <li>말하기, 쓰기, 문장은 따로 기록해요.</li>
       </ul>
+    </div>
+    <div class="set-block"><h3>문장 퀴즈</h3>
+      <p class="help">문장은 품사가 명사, 동사, 형용사인 단어로 만들어요. 새 단어는 뜻을 찾을 때 품사도 함께 채우고, 비어 있는 단어는 아래 버튼으로 한꺼번에 채울 수 있어요. 지금 품사가 빈 단어는 ${S.words.filter(w => w.mean && !POS_KIND(w.pos)).length}개예요.</p>
+      <div class="btn-row"><button type="button" class="btn ghost sm" data-set="fillpos">품사 자동으로 채우기</button></div>
     </div>
     <div class="set-block"><h3>백업</h3>
       <p class="help">단어장과 학습 기록은 이 휴대폰에 저장돼요. 휴대폰을 바꾸거나 브라우저 기록을 지우기 전에 백업 파일을 저장해 두고, 새 휴대폰에서 불러오면 그대로 이어서 할 수 있어요.${S.settings.lastBackup ? ` 마지막 백업: ${new Date(S.settings.lastBackup).toLocaleDateString('ko-KR')}` : ''}</p>
@@ -1731,6 +1795,9 @@ async function onSettingsAction(b) {
   if (act === 'len') { S.settings.len = +b.dataset.v; touchSettings(); openSettings(); return; }
   if (act === 'method') { S.settings.spMethod = b.dataset.v; if (b.dataset.v === 'auto') srBlocked = false; touchSettings(); if (sessions.sp && sessions.sp.phase === 'ask') { sessions.sp.method = spMethod(); renderQuiz('sp'); } openSettings(); return; }
   if (act === 'speak') { S.settings.autoSpeak = !S.settings.autoSpeak; touchSettings(); b.setAttribute('aria-checked', String(S.settings.autoSpeak)); return; }
+  if (act === 'wrmiss') { S.settings.wrMiss = +b.dataset.v; touchSettings(); openSettings(); return; }
+  if (act === 'backstroke') { S.settings.backStroke = !S.settings.backStroke; touchSettings(); b.setAttribute('aria-checked', String(S.settings.backStroke)); return; }
+  if (act === 'fillpos') { fillPos(true); return; }
   if (act === 'wrmethod') { S.settings.wrMethod = b.dataset.v; touchSettings(); openSettings(); return; }
   if (act === 'export') { exportBackup(); return; }
   if (act === 'import') { $('#file-import').click(); return; }
@@ -1835,6 +1902,7 @@ if (!storageOK) toast('이 브라우저에서는 단어장이 저장되지 않�
     setTimeout(() => toast('백업한 지 한 달이 넘었어요.', { label: '지금 백업', fn: exportBackup }), 1500);
   }
 })();
+setTimeout(() => { if (navigator.onLine !== false) fillPos(false); }, 4000);
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 }
