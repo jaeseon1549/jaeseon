@@ -334,6 +334,13 @@ dialog::backdrop{ background:rgba(10,20,16,.45); }
 .dlg-in{ padding:18px 20px 20px; }
 .dlg-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .dlg-title{ font-size:18px; }
+.hsk-grid{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; max-height:46vh; overflow:auto; padding:2px; }
+.hsk-w{ appearance:none; cursor:pointer; min-height:42px; padding:0 12px; border-radius:10px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-family:var(--f-han); font-size:20px; }
+.hsk-w.on{ border-color:var(--grid); background:var(--ok-soft); }
+.hsk-w:active{ transform:scale(.95); }
+.pr-msg{ text-align:center; font-size:15px; min-height:22px; margin-top:10px; color:var(--muted); }
+.pr-msg.ok{ color:var(--grid); }
+.pr-msg.no{ color:var(--pen); }
 .pr-mean{ text-align:center; font-size:17px; line-height:1.5; white-space:pre-line; margin-bottom:6px; }
 .btn-row.center{ justify-content:center; }
 .dlg-foot{ display:flex; justify-content:space-between; gap:10px; margin-top:22px; }
@@ -403,6 +410,7 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
         <input id="add-input" type="text" lang="zh-CN" placeholder="중국어(간체)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
         <button id="add-btn" class="btn primary" type="button">추가</button>
       </div>
+      <div class="fill-row"><button type="button" class="btn ghost sm" id="btn-hsk">HSK 단어 추천</button><span class="help">HSK 1~3급 단어를 골라 넣을 수 있어요.</span></div>
       <div class="fill-row" id="fill-row" hidden><button type="button" class="btn ghost sm" id="btn-fill">비어 있는 뜻·품사 자동 채우기</button><span class="help" id="fill-n"></span></div>
       <p class="help">간체로 입력하면 한국어 뜻과 병음을 찾아 함께 저장해요. 뜻은 품사별로 줄을 나눠 저장하고, 어색하면 단어를 눌러 네이버 사전을 보고 고칠 수 있어요. 여러 단어는 띄어 쓰면 한 번에 들어가요.</p>
     </div>
@@ -457,6 +465,7 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
 <dialog id="dlg-settings" aria-label="설정"></dialog>
 <dialog id="dlg-confirm" aria-label="확인"></dialog>
 <dialog id="dlg-practice" aria-label="쓰기 연습"></dialog>
+<dialog id="dlg-hsk" aria-label="HSK 단어 추천"></dialog>
 <dialog id="dlg-backup" aria-label="백업"></dialog>
 <input type="file" id="file-import" accept=".json,application/json" hidden>
 
@@ -1807,8 +1816,8 @@ function paintStrokes(ctx, strokes, size, color, lw) {
     const L = st[st.length - 1]; ctx.lineTo(L[0] * size, L[1] * size); ctx.stroke();
   }
 }
-function mountCanvasPads(sess, w) {
-  const wrap = $('#pads'); if (!wrap) return;
+function mountCanvasPads(sess, w, holderId) {
+  const wrap = $('#' + (holderId || 'pads')); if (!wrap) return;
   const cs = chars(w.hz);
   if (!sess.strokes || sess.strokes.length !== cs.length) { sess.strokes = cs.map(() => []); sess.hist = []; }
   const size = sizePads(wrap, cs.length);
@@ -2029,11 +2038,13 @@ function bindQuiz(mode) {
 }
 
 /* ───────── 쓰기 연습 (기록에 남지 않아요) ───────── */
-const PR = { id: null, writers: [], outline: true };
+const PR = { id: null, writers: [], outline: true, sess: null };
+const practiceFree = () => !!window.HanziWriter && (S.settings.wrMethod || 'stroke') !== 'stroke';
 function openPractice(id) {
   const w = byId(id); if (!w) return;
   if (!window.HanziWriter) { toast('이 기기에서는 획순 연습을 쓸 수 없어요.'); return; }
   PR.id = id;
+  const free = practiceFree();
   const d = $('#dlg-practice');
   d.innerHTML = `<div class="dlg-in">
     <div class="dlg-head"><p class="dlg-title">쓰기 연습</p>
@@ -2041,13 +2052,16 @@ function openPractice(id) {
     <p class="pr-mean">${esc(w.mean || w.hz)}</p>
     <div class="pads-wrap"><div class="pads" id="pr-pads"></div></div>
     <div class="pad-zoom"><button type="button" class="zoom-btn" data-pr="small" aria-label="칸 작게">−</button><span>칸 크기</span><button type="button" class="zoom-btn" data-pr="big" aria-label="칸 크게">+</button></div>
+    <p class="pr-msg" id="pr-msg"></p>
     <div class="btn-row center">
-      <button type="button" class="btn ghost sm" data-pr="outline">${PR.outline ? '윤곽 숨기기' : '윤곽 보기'}</button>
+      ${free
+        ? '<button type="button" class="btn primary sm" data-pr="grade">채점하기</button><button type="button" class="btn ghost sm" data-pr="undo">한 획 지우기</button><button type="button" class="btn ghost sm" data-pr="reset">모두 지우기</button>'
+        : `<button type="button" class="btn ghost sm" data-pr="outline">${PR.outline ? '윤곽 숨기기' : '윤곽 보기'}</button><button type="button" class="btn ghost sm" data-pr="reset">다시 쓰기</button>`}
       <button type="button" class="btn ghost sm" data-pr="animate">획순 보기</button>
-      <button type="button" class="btn ghost sm" data-pr="reset">다시 쓰기</button>
       ${TTS ? '<button type="button" class="btn ghost sm" data-pr="listen">발음 듣기</button>' : ''}
     </div>
-    <p class="help" style="margin-top:10px">획순대로 쓰면 바로 확인해요. 여기서 쓴 것은 기록에 남지 않아요.</p>
+    <p class="help" style="margin-top:10px">${free ? '다 쓴 뒤 채점하기를 누르면 정답 획과 견줘 알려줘요.' : '획순대로 쓰면 바로 확인해요.'} 여기서 쓴 것은 기록에 남지 않아요.</p>
+    <p class="help" style="margin-top:4px">지금 방식: ${free ? '다 쓰고 확인' : '획순 바로 채점'} <button type="button" class="link" data-pr="swap">바꾸기</button></p>
   </div>`;
   if (!d.open) d.showModal();
   mountPractice(w);
@@ -2058,6 +2072,12 @@ function mountPractice(w) {
   stopPractice();
   const cs = chars(w.hz);
   const size = sizePads(holder, cs.length);
+  const msg = $('#pr-msg'); if (msg) msg.textContent = '';
+  if (practiceFree()) {
+    PR.sess = { phase: 'ask', busy: false, strokes: cs.map(() => []), hist: [] };
+    mountCanvasPads(PR.sess, w, 'pr-pads');
+    return;
+  }
   holder.innerHTML = cs.map((c, i) => `<div class="pad"><div class="hw-box" aria-label="${i + 1}번째 글자 쓰는 칸"></div></div>`).join('');
   const ink = inkColor(), grid = cssVar('--grid', '#2E7A5E'), soft = cssVar('--grid-soft', '#C4DBCE');
   $$('.hw-box', holder).forEach((box, i) => {
@@ -2077,28 +2097,79 @@ function mountPractice(w) {
     try { wr.quiz({ onComplete: () => { try { wr.showCharacter(); } catch (e) {} } }); } catch (e) {}
   });
 }
+async function gradePractice() {
+  const w = byId(PR.id); if (!w || !PR.sess) return;
+  const msg = $('#pr-msg'); if (!msg) return;
+  const cs = chars(w.hz);
+  if (!PR.sess.strokes.some(st => st.length)) { msg.className = 'pr-msg no'; msg.textContent = '칸에 글자를 써 주세요.'; return; }
+  msg.className = 'pr-msg'; msg.textContent = '채점하고 있어요…';
+  const bad = [];
+  try {
+    for (let i = 0; i < cs.length; i++) {
+      const data = await loadCharData(cs[i]);
+      const r = gradeChar(PR.sess.strokes[i], data, !!S.settings.backStroke);
+      if (!r.ok) bad.push(`${cs.length > 1 ? (i + 1) + '번째 칸: ' : ''}${r.why}`);
+    }
+  } catch (e) { msg.className = 'pr-msg no'; msg.textContent = '획순 정보를 받지 못해 채점하지 못했어요.'; return; }
+  if (!bad.length) { msg.className = 'pr-msg ok'; msg.textContent = '잘 썼어요.'; }
+  else { msg.className = 'pr-msg no'; msg.textContent = bad.join(' / '); }
+}
 async function practiceAnimate() {
   const w = byId(PR.id); if (!w) return;
   stopPractice();
-  for (const wr of PR.writers.slice()) { try { wr.cancelQuiz(); } catch (e) {} }
   const holder = $('#pr-pads'); if (!holder) return;
-  const boxes = $$('.hw-box', holder);
   const cs = chars(w.hz);
-  const size = padSize(cs.length);
+  const size = sizePads(holder, cs.length);
   const ink = inkColor(), soft = cssVar('--grid-soft', '#C4DBCE');
+  holder.innerHTML = cs.map(() => '<div class="pad"><div class="hw-box"></div></div>').join('');
   PR.writers = [];
-  for (let i = 0; i < boxes.length; i++) {
-    boxes[i].innerHTML = '';
-    const wr = HanziWriter.create(boxes[i], cs[i], {
-      width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
-      showOutline: true, showCharacter: false, strokeColor: ink, outlineColor: soft,
-      strokeAnimationSpeed: 1.1, delayBetweenStrokes: 220,
-    });
-    PR.writers.push(wr);
-  }
+  $$('.hw-box', holder).forEach((box, i) => {
+    try {
+      PR.writers.push(HanziWriter.create(box, cs[i], {
+        width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
+        showOutline: true, showCharacter: false, strokeColor: ink, outlineColor: soft,
+        strokeAnimationSpeed: 1.1, delayBetweenStrokes: 220,
+      }));
+    } catch (e) {}
+  });
   for (const wr of PR.writers) {
     await new Promise(res => { try { wr.animateCharacter({ onComplete: res }); } catch (e) { res(); } setTimeout(res, 8000); });
   }
+}
+
+/* ───────── HSK 단어 추천 ───────── */
+const HSK = {
+  1: '爱 八 爸爸 杯子 北京 本 不客气 不 菜 茶 吃 出租车 打电话 大 的 点 电脑 电视 电影 东西 都 读 对不起 多 多少 儿子 二 饭店 飞机 分钟 高兴 个 工作 狗 汉语 好 号 喝 和 很 后面 回 会 几 家 叫 今天 九 开 看 看见 块 来 老师 了 冷 里 六 妈妈 吗 买 猫 没关系 没有 米饭 名字 明天 哪 哪儿 那 呢 能 你 年 女儿 朋友 漂亮 苹果 七 前面 钱 请 去 热 人 认识 三 商店 上 上午 少 谁 什么 十 时候 是 书 水 水果 睡觉 说话 四 岁 他 她 太 天气 听 同学 喂 我 我们 五 喜欢 下 下午 下雨 先生 现在 想 小 小姐 些 写 谢谢 星期 学生 学习 学校 一 一点儿 衣服 医生 医院 椅子 有 月 在 再见 怎么 怎么样 这 中国 中午 住 桌子 字 昨天 坐 做'.split(' '),
+  2: '吧 白 百 帮助 报纸 比 别 宾馆 长 唱歌 出 穿 次 从 错 打篮球 大家 到 得 等 弟弟 第一 懂 对 房间 非常 服务员 高 告诉 哥哥 给 公共汽车 公司 贵 过 还 孩子 好吃 黑 红 火车站 机场 鸡蛋 件 教室 姐姐 介绍 进 近 就 觉得 咖啡 开始 考试 可能 可以 课 快 快乐 累 离 两 零 路 旅游 卖 慢 忙 每 妹妹 门 男 您 牛奶 女 旁边 跑步 便宜 票 妻子 起床 千 铅笔 晴 去年 让 日 上班 身体 生病 生日 时间 事情 手表 手机 说 送 虽然 但是 它 踢足球 题 跳舞 外 完 玩 晚上 往 为什么 问 问题 西瓜 希望 洗 小时 笑 新 姓 休息 雪 颜色 眼睛 羊肉 药 要 也 一起 一下 已经 意思 因为 所以 阴 游泳 右边 鱼 远 运动 再 早上 丈夫 找 着 真 正在 知道 准备 走 最 左边'.split(' '),
+  3: '阿姨 啊 矮 爱好 安静 把 班 搬 办法 办公室 半 帮忙 包 饱 北方 被 鼻子 比较 比赛 必须 变化 表示 表演 别人 冰箱 才 菜单 参加 草 层 差 超市 衬衫 成绩 城市 迟到 出现 除了 春 词典 聪明 打扫 打算 带 担心 蛋糕 当然 地 灯 地方 地铁 地图 电梯 电子邮件 东 冬 动物 短 段 锻炼 多么 饿 而且 耳朵 发 发烧 发现 方便 放 放心 分 附近 复习 干净 感冒 感兴趣 刚才 个子 根据 跟 更 公斤 公园 故事 刮风 关 关系 关心 关于 国家 过去 还是 害怕 黑板 后来 护照 花 画 坏 欢迎 环境 换 黄河 回答 会议 火车 机会 几乎 季节 记得 检查 简单 健康 见面 讲 教 角 脚 接 街道 节目 节日 结婚 结束 解决 借 经常 经过 经理 久 旧 句子 决定 可爱 渴 刻 客人 空调 口 哭 裤子 筷子 蓝 老 离开 礼物 历史 脸 练习 辆 聊天 了解 邻居 留学 楼 绿 马 马上 满意 帽子 米 面包 明白 拿 奶奶 南 难 难过 年级 年轻 鸟 努力 爬山 盘子 胖 皮鞋 啤酒 瓶子 其实 其他 奇怪 骑 起飞 起来 清楚 请假 秋 裙子 然后 热情 认为 认真 容易 如果 伞 上网 生气 声音 世界 试 瘦 叔叔 舒服 树 数学 刷牙 双 水平 司机 太阳 特别 疼 提高 体育 甜 条 同事 同意 头发 突然 图书馆 腿 完成 碗 万 忘记 为 为了 位 文化 西 习惯 洗手间 洗澡 夏 先 相同 相信 香蕉 向 像 小心 校长 新闻 新鲜 信用卡 行李箱 熊猫 需要 选择 要求 爷爷 一般 一边 一定 一共 一会儿 一样 一直 以前 音乐 银行 饮料 应该 影响 用 游戏 有名 又 遇到 元 愿意 月亮 越 云 站 张 着急 照顾 照片 照相机 只 只有 中间 中文 终于 种 重要 周末 主要 注意 自己 自行车 总是 嘴 最后 最近 作业'.split(' '),
+};
+const HS = { lv: 1, sel: new Set() };
+function openHsk() {
+  const d = $('#dlg-hsk');
+  const have = new Set(S.words.map(w => w.hz));
+  const list = (HSK[HS.lv] || []).filter(hz => !have.has(hz));
+  const done = (HSK[HS.lv] || []).length - list.length;
+  d.innerHTML = `<div class="dlg-in">
+    <div class="dlg-head"><p class="dlg-title">HSK 단어 추천</p>
+      <button type="button" class="icon-btn" data-hsk="close" aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="chips">${[1, 2, 3].map(lv => `<button type="button" class="chip" data-hsk="lv" data-v="${lv}" aria-pressed="${HS.lv === lv}">${lv}급</button>`).join('')}</div>
+    <p class="help" style="margin-top:8px">${HSK[HS.lv].length}개 가운데 ${done}개는 이미 단어장에 있어요. 넣고 싶은 단어를 눌러 고른 뒤 추가하면 뜻과 병음을 찾아 저장해요.</p>
+    ${list.length ? `<div class="hsk-grid">${list.map(hz => `<button type="button" class="hsk-w${HS.sel.has(hz) ? ' on' : ''}" data-hsk="pick" data-v="${esc(hz)}" lang="zh-CN">${esc(hz)}</button>`).join('')}</div>`
+      : '<p class="lead" style="margin-top:14px">이 급수의 단어를 모두 넣었어요.</p>'}
+    <div class="dlg-foot">
+      <button type="button" class="btn ghost sm" data-hsk="rand" ${list.length ? '' : 'disabled'}>무작위 10개 고르기</button>
+      <button type="button" class="btn primary" data-hsk="add" ${HS.sel.size ? '' : 'disabled'}>${HS.sel.size ? HS.sel.size + '개 추가' : '추가'}</button>
+    </div>
+  </div>`;
+  if (!d.open) d.showModal();
+}
+async function addHsk(btn) {
+  const picked = [...HS.sel];
+  if (!picked.length) return;
+  await busy(btn, '넣는 중…', () => addWords(picked.join(' ')));
+  HS.sel.clear();
+  try { $('#dlg-hsk').close(); } catch (e) {}
+  go('words');
 }
 
 /* ───────── 설정 ───────── */
@@ -2234,6 +2305,22 @@ function bind() {
   });
   $('#try-sample').addEventListener('click', () => addWords('你好 谢谢 再见'));
   $('#btn-fill').addEventListener('click', e => busy(e.currentTarget, '채우는 중…', fillGaps));
+  $('#btn-hsk').addEventListener('click', () => { HS.sel.clear(); openHsk(); });
+  $('#dlg-hsk').addEventListener('click', e => {
+    if (e.target === e.currentTarget) { e.currentTarget.close(); return; }
+    const b = e.target.closest('[data-hsk]'); if (!b || b.disabled) return;
+    const act = b.dataset.hsk;
+    if (act === 'close') { $('#dlg-hsk').close(); return; }
+    if (act === 'lv') { HS.lv = +b.dataset.v; HS.sel.clear(); openHsk(); return; }
+    if (act === 'pick') { const hz = b.dataset.v; if (HS.sel.has(hz)) HS.sel.delete(hz); else HS.sel.add(hz); openHsk(); return; }
+    if (act === 'rand') {
+      const have = new Set(S.words.map(w => w.hz));
+      const pool = (HSK[HS.lv] || []).filter(hz => !have.has(hz) && !HS.sel.has(hz));
+      for (let i = 0; i < 10 && pool.length; i++) HS.sel.add(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      openHsk(); return;
+    }
+    if (act === 'add') addHsk(b);
+  });
   $('#search').addEventListener('input', renderWords);
   $('#sort').addEventListener('change', renderWords);
   $('#word-list').addEventListener('click', e => {
@@ -2272,6 +2359,9 @@ function bind() {
     if (act === 'listen') { speak(w.hz); return; }
     if (act === 'animate') { practiceAnimate(); return; }
     if (act === 'reset') { mountPractice(w); return; }
+    if (act === 'grade') { busy(b, '채점 중…', gradePractice); return; }
+    if (act === 'undo') { if (PR.sess) { const i = PR.sess.hist.pop(); if (i != null) { PR.sess.strokes[i].pop(); mountCanvasPads(PR.sess, w, 'pr-pads'); } } return; }
+    if (act === 'swap') { S.settings.wrMethod = practiceFree() ? 'stroke' : 'free'; touchSettings(); openPractice(PR.id); return; }
     if (act === 'outline') { PR.outline = !PR.outline; openPractice(PR.id); return; }
     if (act === 'big' || act === 'small') {
       const cur = +S.settings.padScale || 1;
