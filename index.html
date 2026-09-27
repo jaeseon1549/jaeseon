@@ -142,6 +142,10 @@ select{ appearance:none; padding-right:30px;
 .list-note{ font-size:13px; color:var(--pen); margin:8px 0 0; }
 .wl{ list-style:none; margin:8px 0 0; padding:0; }
 .wl > li + li{ border-top:1px solid var(--line); }
+.wrow{ display:flex; align-items:center; gap:4px; }
+.w-pen{ appearance:none; flex:none; width:44px; height:44px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface); color:var(--grid); display:grid; place-items:center; cursor:pointer; }
+.w-pen svg{ width:20px; height:20px; }
+.w-pen:active{ transform:scale(.94); background:var(--ok-soft); }
 .w{
   appearance:none; background:none; border:0; width:100%; text-align:left; cursor:pointer;
   display:grid; grid-template-columns:minmax(76px,auto) 1fr auto; gap:14px; align-items:center;
@@ -396,7 +400,7 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
     <div class="add">
       <label for="add-input" class="add-label">단어 추가</label>
       <div class="add-row">
-        <input id="add-input" type="text" lang="zh-CN" placeholder="你好" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
+        <input id="add-input" type="text" lang="zh-CN" placeholder="중국어(간체)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
         <button id="add-btn" class="btn primary" type="button">추가</button>
       </div>
       <div class="fill-row" id="fill-row" hidden><button type="button" class="btn ghost sm" id="btn-fill">비어 있는 뜻·품사 자동 채우기</button><span class="help" id="fill-n"></span></div>
@@ -949,14 +953,14 @@ function renderWords() {
   note.textContent = noMean ? `뜻이 없는 단어 ${noMean}개는 퀴즈에 나오지 않아요. 눌러서 뜻을 넣어 주세요.` : '';
 
   $('#word-list').innerHTML = list.map(w => `
-    <li><button type="button" class="w" data-id="${esc(w.id)}">
+    <li class="wrow"><button type="button" class="w" data-id="${esc(w.id)}">
       <span class="w-han" lang="zh-CN">${ruby(w.hz, w.py)}</span>
       <span class="w-body">
         <span class="w-mean">${w.st === 'pending' ? '<span class="pending">뜻 찾는 중…</span>' : (w.pos ? `<span class="w-pos">${esc(w.pos)}</span>` : '') + esc(w.mean)}</span>
         <span class="w-tags">${tagsHTML(w)}</span>
       </span>
       <svg class="w-go" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 3l5 5-5 5"/></svg>
-    </button></li>`).join('');
+    </button>${window.HanziWriter ? `<button type="button" class="w-pen" data-practice="${esc(w.id)}" aria-label="${esc(w.hz)} 쓰기 연습"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c3-.5 5-2 6.5-3.5L19 8a2.1 2.1 0 0 0-3-3l-8.5 8.5C6 15 4.5 17 4 20z"/><path d="M14.5 6.5l3 3"/></svg></button>` : ''}</li>`).join('');
 }
 
 function splitWords(raw) {
@@ -1025,9 +1029,9 @@ function openEdit(id) {
       <button type="button" class="btn ghost sm" data-ed="relookup">뜻 다시 찾기</button>
       ${window.HanziWriter ? '<button type="button" class="btn ghost sm" data-ed="practice">쓰기 연습</button>' : ''}
     </div>
-    <label class="field"><span>한국어 뜻 <small>품사마다 줄을 나눠 쓰면 문장 퀴즈가 더 정확해져요. 예: 명사: 출발 / 줄바꿈 / 동사: 출발하다</small></span><textarea id="ed-mean" rows="3" placeholder="명사: 출발&#10;동사: 출발하다">${esc(w.mean)}</textarea></label>
-    <label class="field"><span>병음 <small>음절마다 띄어 써요. ni3 hao3처럼 숫자로 써도 돼요.</small></span><input type="text" id="ed-py" value="${esc(w.py.join(' '))}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
-    <label class="field"><span>품사</span><input type="text" id="ed-pos" value="${esc(w.pos)}" placeholder="예: 동사"></label>
+    <label class="field"><span>한국어 뜻 <small>품사마다 줄을 나눠 쓰면 문장 퀴즈가 더 정확해져요.</small></span><textarea id="ed-mean" rows="3">${esc(w.mean)}</textarea></label>
+    <label class="field"><span>병음 <small>음절마다 띄어 써요. 성조는 숫자로 써도 돼요.</small></span><input type="text" id="ed-py" value="${esc(w.py.join(' '))}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="field"><span>품사</span><input type="text" id="ed-pos" value="${esc(w.pos)}"></label>
     <table class="rec"><caption>학습 기록</caption><tbody>${recRow('말하기', w.sp)}${recRow('쓰기', w.wr)}${recRow('문장', w.sn)}</tbody></table>
     <button type="button" class="link" data-ed="resetrec">이 단어 기록 초기화</button>
     <div class="dlg-foot"><button type="button" class="btn danger-ghost" data-ed="delete">삭제</button><button type="button" class="btn primary" data-ed="save">저장</button></div>
@@ -1300,8 +1304,10 @@ async function startSession(mode, btn) {
   const sess = newSession(mode);
   if (mode === 'sp') sess.method = spMethod();
   else {
-    sess.hw = !!window.HanziWriter && S.settings.wrMethod !== 'self';
-    sess.auto = false;
+    const wm = S.settings.wrMethod || 'stroke';
+    sess.hw = !!window.HanziWriter && wm === 'stroke';
+    sess.free = !!window.HanziWriter && wm === 'free';
+    sess.auto = sess.free;
   }
   sessions[mode] = sess;
   loadQuestion(sess);
@@ -1361,6 +1367,7 @@ function promptHTML(w, mode) {
   return `<div class="prompt"><p class="pos">${esc(w.pos)}</p><p class="mean${mode === 'sn' ? ' sent' : ''}">${esc(w.mean)}</p>${slots}</div>`;
 }
 function wrTries(sess) {
+  if (sess.free) return triesHTML(sess);
   if (!useHW(sess)) return '';
   let t = '';
   if (sess.phase === 'reveal') {
@@ -1522,7 +1529,7 @@ async function onMic(sess) {
 /* 쓰기: 획순 채점(Hanzi Writer) 또는 직접 쓰고 스스로 채점 */
 const useHW = sess => sess.hw && !sess.hwFail;
 function wrFeedback(sess) {
-  return `${sess.msg ? `<p class="fb-msg ${sess.msgCalm ? 'calm' : ''}">${esc(sess.msg)}</p>` : ''}${sess.hint ? `<p class="hint">힌트: 병음 <b>${esc(sess.hint)}</b></p>` : ''}`;
+  return `${sess.busy ? '<p class="fb-msg calm">채점하고 있어요…</p>' : ''}${sess.msg && !sess.busy ? `<p class="fb-msg ${sess.msgCalm ? 'calm' : ''}">${esc(sess.msg)}</p>` : ''}${sess.notes && !sess.busy ? `<ul class="notes">${sess.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}${sess.hint ? `<p class="hint">힌트: 병음 <b>${esc(sess.hint)}</b></p>` : ''}`;
 }
 function writeStage(sess, w) {
   let html = `<div class="pads-wrap"><div class="pads-in"><div class="pads ${sess.phase !== 'ask' ? 'locked' : ''}" id="pads"></div></div></div>`;
@@ -1535,16 +1542,34 @@ function writeStage(sess, w) {
     return html + padZoom() + `<p class="hw-guide">획순대로 한 획씩 써 주세요. 틀린 획은 사라지니 될 때까지 다시 그으면 돼요. 정답 획순은 모르겠어요를 눌렀을 때만 보여줘요.</p>
       <div class="feedback" id="wr-fb" aria-live="polite">${wrFeedback(sess)}</div>
       <div class="actions"><button type="button" class="btn ghost" data-act="giveup">모르겠어요</button><button type="button" class="btn ghost" data-act="skip">건너뛰기</button></div>
-      <div class="stage-links"><button type="button" class="link" data-act="use-free">획순 없이 쓰고 스스로 채점하기</button></div>`;
+      <div class="stage-links"><button type="button" class="link" data-act="use-free">다 쓰고 나서 확인하기로 바꾸기</button><button type="button" class="link" data-act="use-selfgrade">스스로 채점하기로 바꾸기</button></div>`;
   }
-  return html + padZoom() + `<div class="pad-tools"><button type="button" class="link" data-act="undo">한 획 지우기</button><button type="button" class="link" data-act="clear">모두 지우기</button></div>
-    <div class="feedback" aria-live="polite">${wrFeedback(sess)}</div>
+  return html + padZoom() + `<p class="hw-guide">${sess.free ? '칸에 다 쓴 뒤 채점하기를 누르면 정답 획과 비교해 채점해요.' : '칸에 다 쓴 뒤 정답과 비교해 스스로 채점해요.'}</p>
+    <div class="pad-tools"><button type="button" class="link" data-act="undo" ${sess.busy ? 'disabled' : ''}>한 획 지우기</button><button type="button" class="link" data-act="clear" ${sess.busy ? 'disabled' : ''}>모두 지우기</button></div>
+    <div class="feedback" id="wr-fb" aria-live="polite">${wrFeedback(sess)}</div>
     <div class="actions">
-      <button type="button" class="btn ghost" data-act="giveup">모르겠어요</button>
-      <button type="button" class="btn primary big" data-act="submit">정답과 비교하기</button>
-      <button type="button" class="btn ghost" data-act="skip">건너뛰기</button>
+      <button type="button" class="btn ghost" data-act="giveup" ${sess.busy ? 'disabled' : ''}>모르겠어요</button>
+      <button type="button" class="btn primary big" data-act="submit" ${sess.busy ? 'disabled' : ''}>${sess.free ? '채점하기' : '정답과 비교하기'}</button>
+      <button type="button" class="btn ghost" data-act="skip" ${sess.busy ? 'disabled' : ''}>건너뛰기</button>
     </div>
-    ${window.HanziWriter && sess.hwFail !== 'data' ? '<div class="stage-links"><button type="button" class="link" data-act="use-hw">획순 채점으로 하기</button></div>' : ''}`;
+    ${sess.offerSelf && !sess.busy ? '<div class="stage-links"><button type="button" class="link" data-act="selfcheck">정답을 보고 스스로 채점하기</button></div>' : ''}
+    <div class="stage-links">
+      ${window.HanziWriter && sess.hwFail !== 'data' ? '<button type="button" class="link" data-act="use-hw">획순 바로 채점으로 바꾸기</button>' : ''}
+      ${window.HanziWriter && sess.hwFail !== 'data' && !sess.free ? '<button type="button" class="link" data-act="use-free">다 쓰고 나서 확인하기로 바꾸기</button>' : ''}
+      ${sess.free ? '<button type="button" class="link" data-act="use-selfgrade">스스로 채점하기로 바꾸기</button>' : ''}
+    </div>`;
+}
+function setWriteMode(sess, m) {
+  S.settings.wrMethod = m; touchSettings();
+  stopWriters(sess);
+  sess.hw = m === 'stroke' && !!window.HanziWriter;
+  sess.free = m === 'free' && !!window.HanziWriter;
+  sess.auto = sess.free;
+  sess.hwFail = false; sess.padsEl = null; sess.writers = []; sess.doneChars = new Set(); sess.strokeDone = null;
+  const it = itemOf(sess);
+  if (it) { sess.strokes = chars(it.hz).map(() => []); sess.hist = []; }
+  sess.msg = null; sess.notes = null; sess.bad = null; sess.offerSelf = false;
+  renderQuiz(sess.mode);
 }
 function padZoom() {
   return `<div class="pad-zoom"><button type="button" class="zoom-btn" data-act="pad-" aria-label="칸 작게">−</button><span>칸 크기</span><button type="button" class="zoom-btn" data-act="pad+" aria-label="칸 크게">+</button></div>`;
@@ -1670,6 +1695,104 @@ async function animateAnswer(sess) {
   }
 }
 
+/* 다 쓰고 나서 확인: 쓴 획을 정답 획과 비교해요 */
+const charData = new Map();
+function loadCharData(ch) {
+  if (charData.has(ch)) return Promise.resolve(charData.get(ch));
+  if (!window.HanziWriter || typeof HanziWriter.loadCharacterData !== 'function') return Promise.reject(new Error('no-lib'));
+  return HanziWriter.loadCharacterData(ch).then(d => { charData.set(ch, d); return d; });
+}
+const toBox = ([x, y]) => [x / 1024, (900 - y) / 1024];
+function pathLen(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return s; }
+function resample(pts, n) {
+  if (!pts.length) return [];
+  if (pts.length === 1 || !pathLen(pts)) return Array.from({ length: n }, () => pts[0]);
+  const step = pathLen(pts) / (n - 1);
+  const out = [pts[0]];
+  let prev = pts[0], acc = 0, i = 1;
+  while (out.length < n && i < pts.length) {
+    const seg = Math.hypot(pts[i][0] - prev[0], pts[i][1] - prev[1]);
+    if (acc + seg >= step && seg > 0) {
+      const t = (step - acc) / seg;
+      const np = [prev[0] + (pts[i][0] - prev[0]) * t, prev[1] + (pts[i][1] - prev[1]) * t];
+      out.push(np); prev = np; acc = 0;
+    } else { acc += seg; prev = pts[i]; i++; }
+  }
+  while (out.length < n) out.push(pts[pts.length - 1]);
+  return out;
+}
+const seqDist = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.hypot(a[i][0] - b[i][0], a[i][1] - b[i][1]); return s / a.length; };
+function strokeDist(user, exp, allowBack) {
+  const A = resample(user, 14), B = resample(exp, 14);
+  const d = seqDist(A, B);
+  return allowBack ? Math.min(d, seqDist(A, B.slice().reverse())) : d;
+}
+function bbox(strokes) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  strokes.forEach(st => st.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }));
+  return { x0, y0, x1, y1, w: Math.max(0.001, x1 - x0), h: Math.max(0.001, y1 - y0) };
+}
+/* 쓴 글자가 작거나 한쪽으로 치우쳐도 정답과 견줄 수 있게 크기와 자리를 맞춰요 */
+function fitStrokes(strokes, target) {
+  const b = bbox(strokes);
+  const k = Math.min(target.w / b.w, target.h / b.h);
+  const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+  const tx = (target.x0 + target.x1) / 2, ty = (target.y0 + target.y1) / 2;
+  return strokes.map(st => st.map(([x, y]) => [(x - cx) * k + tx, (y - cy) * k + ty]));
+}
+function gradeChar(userStrokes, data, allowBack) {
+  const exp = (data && Array.isArray(data.medians) ? data.medians : []).map(m => m.map(toBox)).filter(m => m.length);
+  const raw = (userStrokes || []).filter(st => st && st.length);
+  if (!exp.length) return { ok: false, why: '획순 정보를 받지 못했어요' };
+  if (!raw.length) return { ok: false, why: '아직 안 썼어요' };
+  if (raw.length !== exp.length) return { ok: false, why: `${exp.length}획인데 ${raw.length}획으로 썼어요` };
+  const us = fitStrokes(raw, bbox(exp));
+  const used = new Array(us.length).fill(false);
+  for (let i = 0; i < exp.length; i++) {
+    let best = -1, bd = Infinity;
+    for (let j = 0; j < us.length; j++) {
+      if (used[j]) continue;
+      const d = strokeDist(us[j], exp[i], allowBack);
+      if (d < bd) { bd = d; best = j; }
+    }
+    if (best < 0 || bd > 0.15) return { ok: false, why: '획 모양이나 자리가 달라요' };
+    used[best] = true;
+  }
+  return { ok: true };
+}
+async function gradeFree(sess) {
+  const w = itemOf(sess); if (!w) return;
+  const cs = chars(w.hz);
+  const wid = sess.cur;
+  sess.busy = true; sess.msg = null; sess.notes = null; sess.offerSelf = false;
+  renderQuiz(sess.mode);
+  const bad = [], why = [];
+  try {
+    for (let i = 0; i < cs.length; i++) {
+      const data = await loadCharData(cs[i]);
+      const r = gradeChar(sess.strokes[i], data, !!S.settings.backStroke);
+      if (!r.ok) { bad.push(i); why.push(r.why); }
+    }
+  } catch (e) {
+    if (sessions[sess.mode] !== sess || sess.cur !== wid) return;
+    sess.busy = false;
+    sess.msg = '획순 정보를 받지 못해 채점하지 못했어요. 인터넷 연결을 확인하거나, 정답과 비교해 스스로 채점해 주세요.';
+    sess.msgCalm = true; sess.offerSelf = true;
+    renderQuiz(sess.mode); return;
+  }
+  if (sessions[sess.mode] !== sess || sess.cur !== wid || sess.phase !== 'ask') return;
+  sess.busy = false;
+  if (!bad.length) { finish(sess, sess.fails === 0 ? 'first' : 'retry'); return; }
+  sess.fails++;
+  sess.bad = bad;
+  sess.notes = bad.map((i, k) => `${cs.length > 1 ? (i + 1) + '번째 칸: ' : ''}${why[k]}`);
+  if (sess.fails >= 3) { finish(sess, 'miss'); return; }
+  sess.msg = `틀린 곳이 있어요. 고쳐서 다시 채점해 보세요. 기회가 ${3 - sess.fails}번 남았어요.`;
+  sess.msgCalm = false;
+  if (sess.fails === 2 && w.py.join('').trim()) sess.hint = w.py.join(' ');
+  renderQuiz(sess.mode);
+}
+
 /* 직접 쓰기(획순 채점을 못 쓸 때) */
 function paintStrokes(ctx, strokes, size, color, lw) {
   ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1722,9 +1845,10 @@ function setupCanvas(cv, i, size, sess, editable) {
   cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 }
 function submitWriting(sess) {
-  if (!sess || sess.phase !== 'ask') return;
+  if (!sess || sess.phase !== 'ask' || sess.busy) return;
   const w = itemOf(sess); if (!w) return;
   if (!sess.strokes || !sess.strokes.some(st => st.length)) { sess.msg = '칸에 글자를 써 주세요.'; sess.msgCalm = true; renderQuiz(sess.mode); return; }
+  if (sess.free) { gradeFree(sess); return; }
   sess.phase = 'selfcheck'; renderQuiz(sess.mode);
   if (S.settings.autoSpeak) speak(w.hz);
 }
@@ -1818,10 +1942,12 @@ function renderStart(mode, root) {
       : m === 'kbd'
         ? `휴대폰 키보드의 마이크(받아쓰기)로 중국어를 말하면, 받아써진 한자를 병음으로 바꿔 채점해요. 정확도 ${S.settings.pass}% 이상이면 정답이에요.`
         : '소리 내어 말한 뒤 정답을 보고 스스로 채점해요. 설정에서 말하기 방법을 바꿀 수 있어요.')
-    : ((window.HanziWriter && S.settings.wrMethod !== 'self'
+    : ((window.HanziWriter && (S.settings.wrMethod || 'stroke') === 'stroke'
       ? `칸에 획순대로 한 획씩 쓰면 바로바로 채점해요. ${+S.settings.wrMiss ? `획을 ${+S.settings.wrMiss}번 틀리면 오답으로 하고 정답 획순을 보여줘요.` : '틀려도 될 때까지 다시 그을 수 있어요.'} 기준과 획 방향 규칙은 설정에서 바꿀 수 있어요.`
-      : '칸에 직접 쓴 뒤 정답과 비교해 스스로 채점해요. 설정에서 획순 채점으로 바꿀 수 있어요.')
-      + (mode === 'sn' ? ' 문장은 这是___, 我喜欢___ 같은 기본 문형에 단어를 넣어 만들어요. 어색한 문장은 건너뛰기를 누르면 돼요.' : ''));
+      : window.HanziWriter && S.settings.wrMethod === 'free'
+        ? '칸에 글자를 다 쓴 뒤 채점하기를 누르면 정답 획과 견줘 채점해요. 기회는 세 번이에요.'
+        : '칸에 직접 쓴 뒤 정답과 비교해 스스로 채점해요. 설정에서 채점 방법을 바꿀 수 있어요.')
+      + (mode === 'sn' ? ' 문장은 기본 문형에 단어장 단어를 넣어 만들어요. 어색한 문장은 건너뛰기를 누르면 돼요.' : ''));
   root.innerHTML = `<div class="start">
     <h2>${title}</h2>
     <p class="lead">${desc}</p>
@@ -1895,8 +2021,9 @@ function bindQuiz(mode) {
       case 'clear': if (sess && sess.phase === 'ask' && !sess.busy) { sess.strokes.forEach(s => { s.length = 0; }); sess.hist = []; sess.bad = null; renderQuiz(mode); } break;
       case 'clearbox': if (sess && sess.phase === 'ask' && !sess.busy) { const i = +b.dataset.i; sess.strokes[i].length = 0; sess.hist = sess.hist.filter(x => x !== i); if (sess.bad) sess.bad = sess.bad.filter(x => x !== i); renderQuiz(mode); } break;
       case 'submit': submitWriting(sess); break;
-      case 'use-free': if (sess && sess.phase === 'ask') { stopWriters(sess); sess.hw = false; sess.padsEl = null; sess.writers = []; sess.strokes = chars(w.hz).map(() => []); sess.hist = []; sess.msg = null; S.settings.wrMethod = 'self'; touchSettings(); renderQuiz(mode); } break;
-      case 'use-hw': if (sess && sess.phase === 'ask' && window.HanziWriter) { sess.hw = true; sess.hwFail = false; sess.padsEl = null; sess.msg = null; S.settings.wrMethod = 'stroke'; touchSettings(); renderQuiz(mode); } break;
+      case 'use-free': if (sess && sess.phase === 'ask') setWriteMode(sess, 'free'); break;
+      case 'use-selfgrade': if (sess && sess.phase === 'ask') setWriteMode(sess, 'self'); break;
+      case 'use-hw': if (sess && sess.phase === 'ask' && window.HanziWriter) setWriteMode(sess, 'stroke'); break;
     }
   });
 }
@@ -1990,9 +2117,9 @@ function openSettings() {
       <p class="help" style="margin-top:8px">${SR ? '앱 마이크가 안 되는 화면에서는 키보드 음성 입력을 써 주세요. 휴대폰 키보드의 마이크로 말하면 받아써진 한자로 채점해요.' : '이 화면은 앱 마이크를 지원하지 않아요. 키보드 음성 입력을 써 주세요.'}</p>
     </div>
     <div class="set-block"><h3>쓰기 채점 방법</h3>
-      <div class="chips">${[['stroke', '획순 채점'], ['self', '스스로 채점']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmethod" data-v="${v}" aria-pressed="${(st.wrMethod || 'stroke') === v}">${l}</button>`).join('')}</div>
-      <p class="help" style="margin-top:8px">획순 채점은 한 획씩 바로 확인해요. 획순이 틀려도 틀린 획으로 쳐요.</p>
-      <p class="field-label" style="margin-top:16px">몇 획 틀리면 오답으로 할까요</p>
+      <div class="chips">${[['stroke', '획순 바로 채점'], ['free', '다 쓰고 확인'], ['self', '스스로 채점']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmethod" data-v="${v}" aria-pressed="${(st.wrMethod || 'stroke') === v}">${l}</button>`).join('')}</div>
+      <p class="help" style="margin-top:8px">획순 바로 채점은 한 획 쓸 때마다 확인해요. 다 쓰고 확인은 글자를 다 쓴 뒤 채점하기를 눌러 정답 획과 견줘 채점하고, 기회는 세 번이에요. 스스로 채점은 정답을 보고 직접 고르는 방식이에요.</p>
+      <p class="field-label" style="margin-top:16px">몇 획 틀리면 오답으로 할까요 <small>(획순 바로 채점일 때)</small></p>
       <div class="range-row">
         <input type="range" id="wrmiss" min="0" max="20" step="1" value="${+st.wrMiss || 0}" aria-label="오답 기준 획 수">
         <span class="range-val" id="wrmiss-val">${+st.wrMiss ? (+st.wrMiss) + '획' : '제한 없음'}</span>
@@ -2000,7 +2127,7 @@ function openSettings() {
       <p class="help" style="margin-top:8px">정한 획 수만큼 틀리면 정답 획순을 보여주고 오답으로 쳐요. 오답인 단어는 더 자주 나와요. 맨 왼쪽까지 내리면 제한 없음이 되고, 다 쓸 때까지 오답이 되지 않아요.</p>
       <div class="set-row" style="margin-top:16px"><h3 style="margin:0">획 방향 느슨하게</h3>
         <button type="button" class="switch" role="switch" data-set="backstroke" aria-checked="${!!st.backStroke}" aria-label="획 방향 느슨하게"></button></div>
-      <p class="help" style="margin-top:6px">켜면 획을 반대 방향으로 그어도 맞은 것으로 쳐요. 삼수변의 세 번째 획처럼 아래에서 위로 올려야 하는 획을 위에서 아래로 그어도 통과해요.</p>
+      <p class="help" style="margin-top:6px">켜면 획을 반대 방향으로 그어도 맞은 것으로 쳐요.</p>
     </div>
     <div class="set-block"><h3>한 번에 푸는 문제 수</h3>
       <div class="chips">${[10, 20, 30].map(v => `<button type="button" class="chip" data-set="len" data-v="${v}" aria-pressed="${st.len === v}">${v}문제</button>`).join('')}</div>
@@ -2109,7 +2236,11 @@ function bind() {
   $('#btn-fill').addEventListener('click', e => busy(e.currentTarget, '채우는 중…', fillGaps));
   $('#search').addEventListener('input', renderWords);
   $('#sort').addEventListener('change', renderWords);
-  $('#word-list').addEventListener('click', e => { const b = e.target.closest('.w'); if (b) openEdit(b.dataset.id); });
+  $('#word-list').addEventListener('click', e => {
+    const pen = e.target.closest('[data-practice]');
+    if (pen) { openPractice(pen.dataset.practice); return; }
+    const b = e.target.closest('.w'); if (b) openEdit(b.dataset.id);
+  });
   $('#dlg-edit').addEventListener('click', e => {
     if (e.target === e.currentTarget) { e.currentTarget.close(); return; }
     const b = e.target.closest('[data-ed]'); if (b && !b.disabled) onEditAction(b.dataset.ed);
