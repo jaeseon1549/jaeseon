@@ -48,7 +48,7 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); background:var(--paper); 
 body{
   margin:0; background:var(--paper); color:var(--ink);
   font-family:var(--f-ui); font-size:16px; line-height:1.6;
-  -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:transparent;
+  -webkit-text-size-adjust:100%; -webkit-tap-highlight-color:rgba(46,122,94,.16);
   padding-bottom:84px;
 }
 [hidden]{ display:none !important; }
@@ -106,12 +106,19 @@ rt{ font-family:var(--f-py); font-weight:500; font-size:.36em; color:var(--grid)
 .btn.sm{ min-height:36px; font-size:14px; padding:0 12px; border-radius:10px; }
 .btn.danger{ background:var(--pen); color:#fff; }
 .btn.danger-ghost{ color:var(--pen); border-color:var(--pen-soft); background:transparent; }
-.btn:disabled{ opacity:.5; cursor:default; }
+.btn:disabled{ opacity:.55; cursor:default; }
+.btn, .chip, .zoom-btn, .icon-btn, .link, .pad-x, .nav button, .w, .switch{ transition:transform .08s ease, filter .08s ease, background-color .12s ease; }
+.btn:not(:disabled):active, .chip:active, .zoom-btn:active, .icon-btn:active, .pad-x:active, .switch:active{ transform:scale(.96); filter:brightness(.92); }
+.link:active{ filter:brightness(.8); }
+.nav button:active, .w:active{ background:var(--ok-soft); }
+.btn.ghost:not(:disabled):active{ background:var(--ok-soft); }
+.mic:active{ transform:scale(.96); }
 .btn svg{ width:18px; height:18px; }
 .link{
   appearance:none; background:none; border:0; padding:8px 2px; font-size:14px; color:var(--muted);
   text-decoration:underline; text-underline-offset:3px; cursor:pointer;
 }
+textarea{ width:100%; font:inherit; font-size:16px; color:var(--ink); background:var(--surface); border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; resize:vertical; }
 input[type=text], input[type=search], select{
   width:100%; font:inherit; font-size:16px; color:var(--ink); background:var(--surface);
   border:1.5px solid var(--line); border-radius:10px; min-height:46px; padding:0 12px;
@@ -129,6 +136,7 @@ select{ appearance:none; padding-right:30px;
 .add-row input{ font-family:var(--f-han); font-size:22px; min-height:52px; }
 .add-row .btn{ min-height:52px; padding:0 22px; }
 .add .help{ margin-top:8px; }
+.fill-row{ display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
 .list-tools{ display:grid; grid-template-columns:1fr auto; gap:8px; margin:6px 0 4px; }
 .list-tools select{ width:auto; min-width:128px; }
 .list-note{ font-size:13px; color:var(--pen); margin:8px 0 0; }
@@ -142,7 +150,7 @@ select{ appearance:none; padding-right:30px;
 .w-han{ font-family:var(--f-han); font-size:28px; line-height:2; white-space:nowrap; }
 .w-han rt{ font-size:.42em; }
 .w-body{ min-width:0; }
-.w-mean{ display:block; font-size:16px; line-height:1.45; overflow-wrap:anywhere; }
+.w-mean{ display:block; font-size:16px; line-height:1.45; overflow-wrap:anywhere; white-space:pre-line; }
 .w-pos{ font-size:12px; color:var(--muted); margin-right:6px; }
 .w-tags{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
 .w-go{ color:var(--line); width:16px; height:16px; }
@@ -179,7 +187,7 @@ select{ appearance:none; padding-right:30px;
 .bar i{ display:block; height:100%; background:var(--grid); transition:width .3s ease; }
 .prompt{ text-align:center; padding:26px 0 6px; }
 .pos{ font-size:13px; color:var(--muted); min-height:20px; }
-.mean{ font-size:29px; line-height:1.35; margin-top:2px; overflow-wrap:anywhere; }
+.mean{ font-size:29px; line-height:1.35; margin-top:2px; overflow-wrap:anywhere; white-space:pre-line; }
 .mean.sent{ font-size:23px; line-height:1.45; }
 .slots{ display:flex; justify-content:center; align-items:center; margin-top:14px; }
 .slots .gz{ --s:30px; }
@@ -243,7 +251,7 @@ select{ appearance:none; padding-right:30px;
 .answer{ text-align:center; padding:18px 0 0; }
 .ans-han{ position:relative; display:inline-block; font-family:var(--f-han); font-size:58px; line-height:1.9; padding:0 6px; }
 .ans-han rt{ font-size:.3em; }
-.ans-mean{ font-size:16px; color:var(--muted); margin-top:-4px; }
+.ans-mean{ font-size:16px; color:var(--muted); margin-top:-4px; white-space:pre-line; }
 .verdict{ text-align:center; font-size:16px; margin-top:12px; }
 .verdict.no{ color:var(--pen); }
 .sent-note{ max-width:34ch; margin:14px auto 0; padding:12px 14px; border-radius:12px; background:var(--ok-soft); font-size:14px; line-height:1.6; text-align:left; }
@@ -322,6 +330,8 @@ dialog::backdrop{ background:rgba(10,20,16,.45); }
 .dlg-in{ padding:18px 20px 20px; }
 .dlg-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .dlg-title{ font-size:18px; }
+.pr-mean{ text-align:center; font-size:17px; line-height:1.5; white-space:pre-line; margin-bottom:6px; }
+.btn-row.center{ justify-content:center; }
 .dlg-foot{ display:flex; justify-content:space-between; gap:10px; margin-top:22px; }
 .dlg-foot.end{ justify-content:flex-end; }
 .ed-han{ text-align:center; font-family:var(--f-han); font-size:48px; line-height:1.9; }
@@ -389,7 +399,8 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
         <input id="add-input" type="text" lang="zh-CN" placeholder="你好" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
         <button id="add-btn" class="btn primary" type="button">추가</button>
       </div>
-      <p class="help">간체로 입력하면 한국어 뜻과 병음을 찾아 함께 저장해요. 뜻은 번역기로 찾아서 어색할 수 있으니, 단어를 눌러 네이버 사전을 보고 고쳐 주세요. 여러 단어는 띄어 쓰면 한 번에 들어가요.</p>
+      <div class="fill-row" id="fill-row" hidden><button type="button" class="btn ghost sm" id="btn-fill">비어 있는 뜻·품사 자동 채우기</button><span class="help" id="fill-n"></span></div>
+      <p class="help">간체로 입력하면 한국어 뜻과 병음을 찾아 함께 저장해요. 뜻은 품사별로 줄을 나눠 저장하고, 어색하면 단어를 눌러 네이버 사전을 보고 고칠 수 있어요. 여러 단어는 띄어 쓰면 한 번에 들어가요.</p>
     </div>
     <div class="list-tools" id="list-tools">
       <input id="search" type="search" placeholder="단어, 뜻, 병음으로 찾기" aria-label="단어 찾기">
@@ -441,6 +452,7 @@ textarea.backup{ width:100%; min-height:180px; font-family:ui-monospace,monospac
 <dialog id="dlg-edit" aria-label="단어 고치기"></dialog>
 <dialog id="dlg-settings" aria-label="설정"></dialog>
 <dialog id="dlg-confirm" aria-label="확인"></dialog>
+<dialog id="dlg-practice" aria-label="쓰기 연습"></dialog>
 <dialog id="dlg-backup" aria-label="백업"></dialog>
 <input type="file" id="file-import" accept=".json,application/json" hidden>
 
@@ -475,24 +487,60 @@ async function fetchJSON(url, ms = 8000) {
 }
 const POS_KO = { noun: '명사', verb: '동사', adjective: '형용사', adverb: '부사', pronoun: '대명사', preposition: '개사', conjunction: '접속사', interjection: '감탄사', particle: '조사', numeral: '수사', number: '수사', 'measure word': '양사', classifier: '양사', abbreviation: '약어', phrase: '구', prefix: '접두사', suffix: '접미사' };
 const okMeaning = m => !!m && !HAN_RE.test(m) && /[가-힣]/.test(m);
+/* 네이버 중국어사전을 먼저 시도해요. 브라우저가 막으면 조용히 번역기로 넘어가요 */
+let naverOff = 0;
+const stripTags = t => String(t || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+async function fromNaver(hz) {
+  if (naverOff >= 2) return null;
+  try {
+    const d = await fetchJSON(`https://zh.dict.naver.com/api3/zhko/search?query=${encodeURIComponent(hz)}&m=mobile&range=word&lang=ko`, 6000);
+    const items = (((d || {}).searchResultMap || {}).searchResultListMap || {}).WORD;
+    const list = (items && items.items) || [];
+    const hit = list.find(x => stripTags(x.expEntry) === hz) || list[0];
+    if (!hit) { naverOff = 0; return null; }
+    const groups = [];
+    for (const mc of (hit.meansCollector || [])) {
+      const label = stripTags(mc.partOfSpeech);
+      const terms = [];
+      for (const mn of (mc.means || [])) {
+        const t = stripTags(mn.value).replace(/^\d+\.\s*/, '');
+        if (t && okMeaning(t) && terms.length < 3 && !terms.includes(t)) terms.push(t);
+      }
+      if (terms.length) groups.push({ label, terms });
+      if (groups.length >= 3) break;
+    }
+    naverOff = 0;
+    if (!groups.length) return null;
+    return {
+      mean: groups.map(g => (g.label ? g.label + ': ' : '') + g.terms.join(', ')).join('\n'),
+      pos: groups.map(g => g.label).filter(Boolean).join(', '),
+      src: 'naver',
+    };
+  } catch (e) { naverOff++; return null; }
+}
 async function fromGoogle(hz) {
   for (const client of ['gtx', 'at']) {
     try {
       const d = await fetchJSON(`https://translate.googleapis.com/translate_a/single?client=${client}&sl=zh-CN&tl=ko&hl=ko&dt=t&dt=bd&q=${encodeURIComponent(hz)}`);
       const tr = Array.isArray(d && d[0]) ? d[0].map(x => (x && x[0]) || '').join('').trim() : '';
-      let mean = '', pos = '';
-      if (Array.isArray(d[1]) && d[1].length) {
+      const groups = [];
+      for (const e of (Array.isArray(d[1]) ? d[1] : [])) {
+        if (!Array.isArray(e)) continue;
+        const raw = e[0] ? String(e[0]).trim() : '';
+        const label = POS_KO[raw.toLowerCase()] || (/[가-힣]/.test(raw) ? raw : '');
         const terms = [];
-        for (const e of d[1]) {
-          if (!Array.isArray(e)) continue;
-          if (!pos && e[0]) pos = String(e[0]);
-          for (const t of (Array.isArray(e[1]) ? e[1] : [])) if (terms.length < 3 && okMeaning(t) && !terms.includes(t)) terms.push(t);
-          if (terms.length >= 3) break;
-        }
-        mean = terms.join(', ');
+        for (const t of (Array.isArray(e[1]) ? e[1] : [])) if (okMeaning(t) && terms.length < 3 && !terms.includes(t)) terms.push(t);
+        if (terms.length) groups.push({ label, terms });
+        if (groups.length >= 3) break;
       }
-      if (!okMeaning(mean)) mean = tr.replace(/[.。!！]+$/, '');
-      if (okMeaning(mean)) return { mean, pos: POS_KO[pos.toLowerCase()] || pos };
+      if (groups.length) {
+        return {
+          mean: groups.map(g => (g.label ? g.label + ': ' : '') + g.terms.join(', ')).join('\n'),
+          pos: groups.map(g => g.label).filter(Boolean).join(', '),
+        };
+      }
+      const plain = tr.replace(/[.。!！]+$/, '');
+      if (okMeaning(plain)) return { mean: plain, pos: '' };
     } catch (e) {}
   }
   return null;
@@ -503,6 +551,7 @@ const ADV_TAIL = /(히|이|게|로|씩|껏|만큼)$/;
 function guessPos(w) {
   const m = m1(w);
   if (!m) return '';
+  if (NUM_KO.has(m) || /^[0-9]+$/.test(m)) return '수사';
   if (m.endsWith('다')) return (KO_ADJ.has(m) || ADJ_TAIL.test(m)) ? '형용사' : '동사';
   if (ADV_TAIL.test(m)) return '';
   if (/[가-힣]$/.test(m)) return '명사';
@@ -534,6 +583,19 @@ async function fetchPos(w) {
   const g = guessPos(w);
   if (g && !found.includes(g)) found.push(g);
   return found.slice(0, 3).join(', ');
+}
+async function busy(btn, label, fn) {
+  if (!btn || btn.disabled) return;
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = label;
+  try { await fn(); } finally { btn.disabled = false; btn.textContent = old; }
+}
+async function fillGaps() {
+  if (navigator.onLine === false) { toast('인터넷에 연결된 뒤 다시 눌러 주세요.'); return; }
+  const noMean = S.words.filter(w => !w.mean).slice(0, 40);
+  if (noMean.length) await lookup(noMean, true);
+  await fillPos(true);
+  renderWords();
 }
 let posRunning = false;
 async function fillPos(manual) {
@@ -878,6 +940,9 @@ function renderWords() {
   $('#words-empty').hidden = !empty || loading;
   $('#list-tools').hidden = empty;
   $('#no-results').hidden = empty || list.length > 0;
+  const gaps = S.words.filter(w => w.st !== 'pending' && (!w.mean || !sentKinds(w).length)).length;
+  $('#fill-row').hidden = !gaps;
+  $('#fill-n').textContent = gaps ? `${gaps}개 남음` : '';
   const noMean = S.words.filter(w => !w.mean && w.st !== 'pending').length;
   const note = $('#list-note');
   note.hidden = !noMean;
@@ -930,8 +995,8 @@ async function lookup(words, quiet) {
   let found = 0;
   for (const w of words) {
     if (!S.words.includes(w)) continue;
-    const r = (await fromGoogle(w.hz)) || (await fromMyMemory(w.hz));
-    if (r) { w.mean = clip(r.mean.replace(/\s+/g, ' '), 60); w.pos = clip(r.pos || '', 8); w.st = 'done'; found++; }
+    const r = (await fromNaver(w.hz)) || (await fromGoogle(w.hz)) || (await fromMyMemory(w.hz));
+    if (r) { w.mean = clip(String(r.mean).replace(/[ \t]+/g, ' ').trim(), 140); if (r.pos) w.pos = clip(r.pos, 18); w.st = 'done'; found++; }
     else if (w.st === 'pending' || !w.mean) w.st = 'failed';
     if (PY) w.py = pyArr(w.hz);
     touch(); renderWords();
@@ -958,8 +1023,9 @@ function openEdit(id) {
       ${TTS ? '<button type="button" class="btn ghost sm" data-ed="listen">발음 듣기</button>' : ''}
       <a class="btn ghost sm" href="${NAVER(w.hz)}" target="_blank" rel="noopener">네이버 사전에서 보기</a>
       <button type="button" class="btn ghost sm" data-ed="relookup">뜻 다시 찾기</button>
+      ${window.HanziWriter ? '<button type="button" class="btn ghost sm" data-ed="practice">쓰기 연습</button>' : ''}
     </div>
-    <label class="field"><span>한국어 뜻</span><input type="text" id="ed-mean" value="${esc(w.mean)}" placeholder="예: 안녕하세요, 안녕"></label>
+    <label class="field"><span>한국어 뜻 <small>품사마다 줄을 나눠 쓰면 문장 퀴즈가 더 정확해져요. 예: 명사: 출발 / 줄바꿈 / 동사: 출발하다</small></span><textarea id="ed-mean" rows="3" placeholder="명사: 출발&#10;동사: 출발하다">${esc(w.mean)}</textarea></label>
     <label class="field"><span>병음 <small>음절마다 띄어 써요. ni3 hao3처럼 숫자로 써도 돼요.</small></span><input type="text" id="ed-py" value="${esc(w.py.join(' '))}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
     <label class="field"><span>품사</span><input type="text" id="ed-pos" value="${esc(w.pos)}" placeholder="예: 동사"></label>
     <table class="rec"><caption>학습 기록</caption><tbody>${recRow('말하기', w.sp)}${recRow('쓰기', w.wr)}${recRow('문장', w.sn)}</tbody></table>
@@ -977,8 +1043,9 @@ async function onEditAction(act) {
   if (act === 'close') { d.close(); return; }
   if (!w) { d.close(); return; }
   if (act === 'listen') { speak(w.hz); return; }
+  if (act === 'practice') { openPractice(w.id); return; }
   if (act === 'save') {
-    w.mean = clip($('#ed-mean').value.replace(/\s+/g, ' '), 60);
+    w.mean = clip($('#ed-mean').value.replace(/[ \t]+/g, ' ').trim(), 140);
     w.py = parsePyInput($('#ed-py').value, w.hz);
     w.pos = clip($('#ed-pos').value, 8);
     w.st = w.mean ? 'done' : 'failed';
@@ -1015,8 +1082,18 @@ const itemOf = sess => (sess.mode === 'sn' ? sess.item : byId(sess.cur));
 const hasJong = t => { const c = String(t).trim().slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : false; };
 const jo = (t, withJong, without) => t + (hasJong(t) ? withJong : without);
 const addJong = (t, idx) => { const c = t.charCodeAt(t.length - 1); return (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 === 0) ? t.slice(0, -1) + String.fromCharCode(c + idx) : t; };
-const m1 = w => String(w.mean || '').split(/[,，/]/)[0].trim();
-const stemOf = w => { const m = m1(w); return m.endsWith('다') ? m.slice(0, -1) : null; };
+const KIND_RE = { n: /명사/, v: /동사/, a: /형용사/ };
+const meanLines = w => String(w.mean || '').split('\n').map(l => l.trim()).filter(Boolean);
+const splitLine = l => { const m = /^([^:：]{1,12})[:：]\s*(.+)$/.exec(l); return m ? { label: m[1].trim(), text: m[2].trim() } : { label: '', text: l }; };
+function meanFor(w, kind) {
+  const lines = meanLines(w).map(splitLine);
+  const re = KIND_RE[kind];
+  if (re) { const hit = lines.find(l => re.test(l.label)); if (hit) return hit.text.split(/[,，/]/)[0].trim(); }
+  const first = lines[0];
+  return first ? first.text.split(/[,，/]/)[0].trim() : '';
+}
+const m1 = w => meanFor(w, null);
+const stemOfM = m => (m && m.endsWith('다')) ? m.slice(0, -1) : null;
 const POS_KINDS = p => {
   const t = String(p || '').toLowerCase().replace(/대명사|pronoun/g, '');
   const out = [];
@@ -1027,29 +1104,45 @@ const POS_KINDS = p => {
 };
 const POS_KIND = p => POS_KINDS(p)[0] || '';
 const TPL = [
-  { k: 'n', zh: x => `这是${x}。`, ko: w => `이것은 ${jo(m1(w), '이에요', '예요')}.` },
-  { k: 'n', zh: x => `这是我的${x}。`, ko: w => `이것은 제 ${jo(m1(w), '이에요', '예요')}.` },
-  { k: 'n', zh: x => `我有${x}。`, ko: w => `저는 ${jo(m1(w), '이', '가')} 있어요.` },
-  { k: 'n', zh: x => `我没有${x}。`, ko: w => `저는 ${jo(m1(w), '이', '가')} 없어요.` },
-  { k: 'n', zh: x => `我喜欢${x}。`, ko: w => `저는 ${jo(m1(w), '을', '를')} 좋아해요.` },
-  { k: 'n', zh: x => `我不喜欢${x}。`, ko: w => `저는 ${jo(m1(w), '을', '를')} 안 좋아해요.` },
-  { k: 'n', zh: x => `我要${x}。`, ko: w => `저는 ${jo(m1(w), '을', '를')} 원해요.` },
-  { k: 'n', zh: x => `${x}在哪儿？`, ko: w => `${jo(m1(w), '은', '는')} 어디에 있어요?` },
-  { k: 'v', zh: x => `我想${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}고 싶어요.` : `저는 ${m1(w)} 하고 싶어요.`; } },
-  { k: 'v', zh: x => `我不${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}지 않아요.` : `저는 ${m1(w)} 안 해요.`; } },
-  { k: 'v', zh: x => `你${x}吗？`, ko: w => { const st = stemOf(w); return st ? `당신은 ${st}나요?` : `${m1(w)} 하나요?`; } },
-  { k: 'v', zh: x => `我会${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${addJong(st, 8)} 수 있어요.` : `저는 ${m1(w)} 할 수 있어요.`; } },
-  { k: 'v', zh: x => `我们${x}吧。`, ko: w => { const st = stemOf(w); return st ? `우리 같이 ${addJong(st, 17)}시다.` : `우리 같이 ${m1(w)} 해요.`; } },
-  { k: 'a', zh: x => `今天很${x}。`, ko: w => { const st = stemOf(w); return st ? `오늘은 ${st}네요.` : `오늘은 ${m1(w)}.`; } },
-  { k: 'a', zh: x => `我很${x}。`, ko: w => { const st = stemOf(w); return st ? `저는 ${st}네요.` : `저는 ${m1(w)}.`; } },
-  { k: 'a', zh: x => `这个很${x}。`, ko: w => { const st = stemOf(w); return st ? `이건 ${st}네요.` : `이건 ${m1(w)}.`; } },
-  { k: 't', zh: x => `${x}很好。`, ko: w => `${jo(m1(w), '은', '는')} 좋아요.` },
-  { k: 't', zh: x => `${x}你忙吗？`, ko: w => `${m1(w)} 바쁘세요?` },
-  { k: 't', zh: x => `我${x}很忙。`, ko: w => `저는 ${m1(w)} 바빠요.` },
+  { k: 'n', zh: x => `这是${x}。`, ko: (w, m) => `이것은 ${jo(m, '이에요', '예요')}.` },
+  { k: 'n', zh: x => `这是我的${x}。`, ko: (w, m) => `이것은 제 ${jo(m, '이에요', '예요')}.` },
+  { k: 'n', zh: x => `我有${x}。`, ko: (w, m) => `저는 ${jo(m, '이', '가')} 있어요.` },
+  { k: 'n', zh: x => `我没有${x}。`, ko: (w, m) => `저는 ${jo(m, '이', '가')} 없어요.` },
+  { k: 'n', zh: x => `我喜欢${x}。`, ko: (w, m) => `저는 ${jo(m, '을', '를')} 좋아해요.` },
+  { k: 'n', zh: x => `我不喜欢${x}。`, ko: (w, m) => `저는 ${jo(m, '을', '를')} 안 좋아해요.` },
+  { k: 'n', zh: x => `我要${x}。`, ko: (w, m) => `저는 ${jo(m, '을', '를')} 원해요.` },
+  { k: 'n', zh: x => `${x}在哪儿？`, ko: (w, m) => `${jo(m, '은', '는')} 어디에 있어요?` },
+  { k: 'v', zh: x => `我想${x}。`, ko: (w, m) => { const st = stemOfM(m); return st ? `저는 ${st}고 싶어요.` : `저는 ${m} 하고 싶어요.`; } },
+  { k: 'v', zh: x => `我不${x}。`, ko: (w, m) => { const st = stemOfM(m); return st ? `저는 ${st}지 않아요.` : `저는 ${m} 안 해요.`; } },
+  { k: 'v', zh: x => `你${x}吗？`, ko: (w, m) => { const st = stemOfM(m); return st ? `당신은 ${st}나요?` : `${m} 하나요?`; } },
+  { k: 'v', zh: x => `我会${x}。`, ko: (w, m) => { const st = stemOfM(m); return st ? `저는 ${addJong(st, 8)} 수 있어요.` : `저는 ${m} 할 수 있어요.`; }, ok: (w, m) => !STATIVE_KO.has(m) },
+  { k: 'v', zh: x => `我们${x}吧。`, ko: (w, m) => { const st = stemOfM(m); return st ? `우리 같이 ${addJong(st, 17)}시다.` : `우리 같이 ${m} 해요.`; }, ok: (w, m) => !STATIVE_KO.has(m) },
+  { k: 'a', zh: x => `今天很${x}。`, ko: (w, m) => { const st = stemOfM(m); return st ? `오늘은 ${st}네요.` : `오늘은 ${m}.`; } },
+  { k: 'a', zh: x => `我很${x}。`, ko: (w, m) => { const st = stemOfM(m); return st ? `저는 ${st}네요.` : `저는 ${m}.`; } },
+  { k: 'a', zh: x => `这个很${x}。`, ko: (w, m) => { const st = stemOfM(m); return st ? `이건 ${st}네요.` : `이건 ${m}.`; } },
+  { k: 't', zh: x => `${x}很好。`, ko: (w, m) => `${jo(m, '은', '는')} 좋아요.` },
+  { k: 't', zh: x => `${x}你忙吗？`, ko: (w, m) => `${m} 바쁘세요?` },
+  { k: 't', zh: x => `我${x}很忙。`, ko: (w, m) => `저는 ${m} 바빠요.` },
 ];
 /* 오늘·내일 같은 시간 표현은 자리도 쓰임도 달라서 따로 다뤄요 */
+const STATIVE_KO = new Set(['사랑하다', '있다', '없다', '되다', '알다', '모르다', '좋아하다', '싫어하다', '필요하다', '생각하다', '느끼다', '보이다', '들리다', '살다', '죽다', '이다', '같다']);
 const TIME_KO = new Set(['오늘', '내일', '어제', '모레', '그저께', '지금', '아침', '점심', '저녁', '밤', '새벽', '오전', '오후', '올해', '작년', '내년', '요즘', '주말', '평일', '이번 주', '다음 주', '지난주', '매일', '오늘밤', '이따가', '나중에']);
 const isTimeWord = w => TIME_KO.has(m1(w)) || /요일$/.test(m1(w));
+/* 수량이나 추상적인 말은 这是~, 我有~ 같은 문형에 넣으면 어색해서 빼요 */
+const NUM_KO = new Set(['영', '공', '하나', '한', '일', '둘', '두', '이', '셋', '세', '삼', '넷', '네', '사', '다섯', '오', '여섯', '육', '일곱', '칠', '여덟', '팔', '아홉', '구', '열', '십', '스물', '서른', '마흔', '쉰', '예순', '일흔', '여든', '아흔', '백', '천', '만', '억']);
+const ABSTRACT_KO = new Set(['사랑', '행복', '건강', '열', '기분', '마음', '생각', '시간', '날씨', '자유', '평화', '미래', '과거', '인생', '세상', '사회', '역사', '문화', '경제', '정치', '성격', '느낌', '소리', '냄새', '맛', '색', '색깔', '나이', '힘', '운', '사실', '의미', '관계', '노력', '결과', '상황', '경험', '지식', '능력', '기회', '습관', '온도', '무게', '길이', '속도']);
+function sentKinds(w) {
+  const m = m1(w);
+  if (!m) return [];
+  if (isTimeWord(w)) return ['t'];
+  let ks = POS_KINDS(w.pos);
+  /* 수량이나 추상적인 뜻은 명사 문형에서만 빼요 */
+  const mn = meanFor(w, 'n') || m;
+  if (NUM_KO.has(mn) || /^[0-9]+$/.test(mn) || /(수사|numeral|number)/i.test(String(w.pos || '')) || ABSTRACT_KO.has(mn)) ks = ks.filter(k => k !== 'n');
+  /* 여러 품사면 형용사 → 동사 → 명사 순으로 골라요. 그래야 문장이 자연스러워요 */
+  const first = ['a', 'v', 'n'].find(k => ks.includes(k));
+  return first ? [first] : [];
+}
 const TPL_NOTE = [
   '这 zhè는 \u0027이\u0027, 是 shì는 \u0027~이다\u0027예요. 这是 + 명사 = 이것은 ~예요.',
   '的 de는 \u0027~의\u0027를 나타내요. 我的 = 나의.',
@@ -1072,9 +1165,9 @@ const TPL_NOTE = [
   '시간을 나타내는 말은 주어 바로 뒤에 올 수도 있어요. 我今天很忙.',
 ];
 function makeSentence(w, avoid) {
-  const ks = isTimeWord(w) ? ['t'] : POS_KINDS(w.pos);
+  const ks = sentKinds(w);
   if (!ks.length) return null;
-  let c = TPL.map((t, i) => ({ t, i })).filter(o => ks.includes(o.t.k));
+  let c = TPL.map((t, i) => ({ t, i })).filter(o => ks.includes(o.t.k) && (!o.t.ok || o.t.ok(w, meanFor(w, o.t.k))));
   if (!c.length) return null;
   const fresh = c.filter(o => o.i !== avoid);
   if (fresh.length) c = fresh;
@@ -1098,7 +1191,7 @@ async function sentenceKo(zh, tpl, w) {
       }
     } catch (e) {}
   }
-  try { return TPL[tpl].ko(w); } catch (e) { return zh; }
+  try { return TPL[tpl].ko(w, meanFor(w, TPL[tpl].k)); } catch (e) { return zh; }
 }
 function prepareSentence(sess, w) {
   const made = makeSentence(w, sess.lastTpl);
@@ -1106,7 +1199,7 @@ function prepareSentence(sess, w) {
   sess.lastTpl = made.tpl;
   sess.zh = made.zh;
   sess.note = TPL_NOTE[made.tpl] || '';
-  sess.gloss = `${w.hz} ${m1(w)}`;
+  sess.gloss = `${w.hz} ${meanFor(w, TPL[made.tpl].k)}`;
   sess.item = null; sess.loading = true;
   const hz = onlyHan(made.zh);
   sess.strokes = chars(hz).map(() => []);
@@ -1123,7 +1216,7 @@ function newSession(mode) {
 }
 function poolFor(mode) {
   const base = eligible();
-  return mode === 'sn' ? base.filter(w => POS_KINDS(w.pos).length) : base;
+  return mode === 'sn' ? base.filter(w => sentKinds(w).length) : base;
 }
 function pick(mode, sess) {
   const pool = poolFor(mode);
@@ -1145,7 +1238,7 @@ function loadQuestion(sess) {
   if (isWrite(sess.mode)) stopWriters(sess);
   if (!w) { sess.phase = (sess.results.length || sess.passed) ? 'summary' : 'start'; return; }
   Object.assign(sess, {
-    padsEl: null, padsFor: null, writers: [], doneChars: new Set(), hwFail: false, animated: false,
+    padsEl: null, padsFor: null, writers: [], doneChars: new Set(), strokeDone: null, hwFail: false, animated: false,
     cur: w.id, phase: 'ask', fails: 0, outcome: null, gaveUp: false, heard: null, msg: null, hint: null,
     notes: null, bad: null, busy: false, listening: false, snap: null, reset: false, offerSelf: false,
     strokes: [], hist: [], item: null, loading: false, zh: null,
@@ -1490,12 +1583,8 @@ function zoomPads(sess, step) {
   if (next === cur) return;
   S.settings.padScale = next;
   touchSettings();
-  const drawn = useHW(sess) ? sess.doneChars.size || sess.fails : (sess.strokes || []).some(st => st.length);
   stopWriters(sess);
-  sess.padsEl = null; sess.writers = []; sess.doneChars = new Set();
-  const it = itemOf(sess);
-  if (it) sess.strokes = chars(it.hz).map(() => []);
-  if (drawn && sess.phase === 'ask') { sess.msg = '칸 크기를 바꿔서 이 글자는 처음부터 써요.'; sess.msgCalm = true; }
+  sess.padsEl = null; sess.writers = [];
   renderQuiz(sess.mode);
 }
 
@@ -1510,9 +1599,11 @@ function mountHW(sess, w) {
   const cs = chars(w.hz);
   const size = sizePads(holder, cs.length);
   holder.innerHTML = cs.map((c, i) => `<div class="pad"><div class="hw-box" aria-label="${i + 1}번째 글자 쓰는 칸"></div></div>`).join('');
-  sess.padsEl = holder; sess.padsFor = w.id; sess.writers = []; sess.doneChars = new Set();
+  sess.padsEl = holder; sess.padsFor = w.id; sess.writers = [];
+  if (!(sess.doneChars instanceof Set)) sess.doneChars = new Set();
+  if (!Array.isArray(sess.strokeDone) || sess.strokeDone.length !== cs.length) sess.strokeDone = cs.map(() => 0);
   const ink = inkColor(), grid = cssVar('--grid', '#2E7A5E'), soft = cssVar('--grid-soft', '#C4DBCE');
-  const wid = w.id;
+  const wid = sess.cur;
   $$('.hw-box', holder).forEach((box, i) => {
     let wr;
     try {
@@ -1528,9 +1619,11 @@ function mountHW(sess, w) {
       });
     } catch (e) { hwFailed(sess, wid, 'lib'); return; }
     sess.writers.push(wr);
-    if (sess.phase !== 'ask') { try { wr.showCharacter(); } catch (e) {} return; }
+    if (sess.phase !== 'ask' || sess.doneChars.has(i)) { try { wr.showCharacter(); } catch (e) {} return; }
     try {
       wr.quiz({
+        quizStartStrokeNum: sess.strokeDone[i] || 0,
+        onCorrectStroke: sd => { sess.strokeDone[i] = (sd && typeof sd.strokeNum === 'number' ? sd.strokeNum + 1 : (sess.strokeDone[i] || 0) + 1); },
         onMistake: () => onHwMistake(sess, wid),
         onComplete: () => onHwChar(sess, wid, i, cs.length),
       });
@@ -1773,7 +1866,7 @@ function bindQuiz(mode) {
     const sess = sessions[mode];
     const w = sess && itemOf(sess);
     switch (act) {
-      case 'fillpos': fillPos(true); break;
+      case 'fillpos': busy(b, '채우는 중…', fillGaps); break;
       case 'pad+': if (sess) zoomPads(sess, 0.2); break;
       case 'pad-': if (sess) zoomPads(sess, -0.2); break;
       case 'towords': go('words'); setTimeout(() => $('#add-input').focus(), 50); break;
@@ -1806,6 +1899,79 @@ function bindQuiz(mode) {
       case 'use-hw': if (sess && sess.phase === 'ask' && window.HanziWriter) { sess.hw = true; sess.hwFail = false; sess.padsEl = null; sess.msg = null; S.settings.wrMethod = 'stroke'; touchSettings(); renderQuiz(mode); } break;
     }
   });
+}
+
+/* ───────── 쓰기 연습 (기록에 남지 않아요) ───────── */
+const PR = { id: null, writers: [], outline: true };
+function openPractice(id) {
+  const w = byId(id); if (!w) return;
+  if (!window.HanziWriter) { toast('이 기기에서는 획순 연습을 쓸 수 없어요.'); return; }
+  PR.id = id;
+  const d = $('#dlg-practice');
+  d.innerHTML = `<div class="dlg-in">
+    <div class="dlg-head"><p class="dlg-title">쓰기 연습</p>
+      <button type="button" class="icon-btn" data-pr="close" aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <p class="pr-mean">${esc(w.mean || w.hz)}</p>
+    <div class="pads-wrap"><div class="pads" id="pr-pads"></div></div>
+    <div class="pad-zoom"><button type="button" class="zoom-btn" data-pr="small" aria-label="칸 작게">−</button><span>칸 크기</span><button type="button" class="zoom-btn" data-pr="big" aria-label="칸 크게">+</button></div>
+    <div class="btn-row center">
+      <button type="button" class="btn ghost sm" data-pr="outline">${PR.outline ? '윤곽 숨기기' : '윤곽 보기'}</button>
+      <button type="button" class="btn ghost sm" data-pr="animate">획순 보기</button>
+      <button type="button" class="btn ghost sm" data-pr="reset">다시 쓰기</button>
+      ${TTS ? '<button type="button" class="btn ghost sm" data-pr="listen">발음 듣기</button>' : ''}
+    </div>
+    <p class="help" style="margin-top:10px">획순대로 쓰면 바로 확인해요. 여기서 쓴 것은 기록에 남지 않아요.</p>
+  </div>`;
+  if (!d.open) d.showModal();
+  mountPractice(w);
+}
+function stopPractice() { PR.writers.forEach(wr => { try { wr.cancelQuiz(); } catch (e) {} }); PR.writers = []; }
+function mountPractice(w) {
+  const holder = $('#pr-pads'); if (!holder) return;
+  stopPractice();
+  const cs = chars(w.hz);
+  const size = sizePads(holder, cs.length);
+  holder.innerHTML = cs.map((c, i) => `<div class="pad"><div class="hw-box" aria-label="${i + 1}번째 글자 쓰는 칸"></div></div>`).join('');
+  const ink = inkColor(), grid = cssVar('--grid', '#2E7A5E'), soft = cssVar('--grid-soft', '#C4DBCE');
+  $$('.hw-box', holder).forEach((box, i) => {
+    let wr;
+    try {
+      wr = HanziWriter.create(box, cs[i], {
+        width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
+        showOutline: PR.outline, showCharacter: false,
+        strokeColor: ink, outlineColor: soft, drawingColor: ink, highlightColor: grid, highlightCompleteColor: grid,
+        drawingWidth: Math.max(5, Math.round(size * 0.05)),
+        showHintAfterMisses: 3, highlightOnComplete: true, leniency: 1.35,
+        acceptBackwardsStrokes: !!S.settings.backStroke,
+        onLoadCharDataError: () => toast('이 글자의 획순 정보를 받지 못했어요. 인터넷 연결을 확인해 주세요.'),
+      });
+    } catch (e) { return; }
+    PR.writers.push(wr);
+    try { wr.quiz({ onComplete: () => { try { wr.showCharacter(); } catch (e) {} } }); } catch (e) {}
+  });
+}
+async function practiceAnimate() {
+  const w = byId(PR.id); if (!w) return;
+  stopPractice();
+  for (const wr of PR.writers.slice()) { try { wr.cancelQuiz(); } catch (e) {} }
+  const holder = $('#pr-pads'); if (!holder) return;
+  const boxes = $$('.hw-box', holder);
+  const cs = chars(w.hz);
+  const size = padSize(cs.length);
+  const ink = inkColor(), soft = cssVar('--grid-soft', '#C4DBCE');
+  PR.writers = [];
+  for (let i = 0; i < boxes.length; i++) {
+    boxes[i].innerHTML = '';
+    const wr = HanziWriter.create(boxes[i], cs[i], {
+      width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
+      showOutline: true, showCharacter: false, strokeColor: ink, outlineColor: soft,
+      strokeAnimationSpeed: 1.1, delayBetweenStrokes: 220,
+    });
+    PR.writers.push(wr);
+  }
+  for (const wr of PR.writers) {
+    await new Promise(res => { try { wr.animateCharacter({ onComplete: res }); } catch (e) { res(); } setTimeout(res, 8000); });
+  }
 }
 
 /* ───────── 설정 ───────── */
@@ -1855,7 +2021,7 @@ function openSettings() {
     </div>
     <div class="set-block"><h3>문장 퀴즈</h3>
       <p class="help">문장은 품사가 명사, 동사, 형용사인 단어로 만들어요. 한 단어가 여러 품사로 쓰이면 모두 저장해서 문형도 그만큼 다양해져요. 지금 문장에 쓸 수 없는 단어는 ${S.words.filter(w => w.mean && !POS_KINDS(w.pos).length).length}개예요.</p>
-      <div class="btn-row"><button type="button" class="btn ghost sm" data-set="fillpos">품사 자동으로 채우기</button></div>
+      <p class="help">비어 있는 단어는 단어장 위쪽의 "비어 있는 뜻·품사 자동 채우기"로 한꺼번에 채울 수 있어요.</p>
     </div>
     <div class="set-block"><h3>백업</h3>
       <p class="help">단어장과 학습 기록은 이 휴대폰에 저장돼요. 휴대폰을 바꾸거나 브라우저 기록을 지우기 전에 백업 파일을 저장해 두고, 새 휴대폰에서 불러오면 그대로 이어서 할 수 있어요.${S.settings.lastBackup ? ` 마지막 백업: ${new Date(S.settings.lastBackup).toLocaleDateString('ko-KR')}` : ''}</p>
@@ -1935,11 +2101,12 @@ async function importBackup(file) {
 function bind() {
   $$('.nav button').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
   const inp = $('#add-input');
-  $('#add-btn').addEventListener('click', () => { const v = inp.value; inp.value = ''; addWords(v); });
+  $('#add-btn').addEventListener('click', e => { const v = inp.value; inp.value = ''; busy(e.currentTarget, '찾는 중…', () => addWords(v)); });
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); const v = inp.value; inp.value = ''; addWords(v); }
   });
   $('#try-sample').addEventListener('click', () => addWords('你好 谢谢 再见'));
+  $('#btn-fill').addEventListener('click', e => busy(e.currentTarget, '채우는 중…', fillGaps));
   $('#search').addEventListener('input', renderWords);
   $('#sort').addEventListener('change', renderWords);
   $('#word-list').addEventListener('click', e => { const b = e.target.closest('.w'); if (b) openEdit(b.dataset.id); });
@@ -1963,6 +2130,23 @@ function bind() {
   $('#dlg-settings').addEventListener('click', e => {
     if (e.target === e.currentTarget) { e.currentTarget.close(); return; }
     const b = e.target.closest('[data-set]'); if (b) onSettingsAction(b);
+  });
+  $('#dlg-practice').addEventListener('click', e => {
+    if (e.target === e.currentTarget) { stopPractice(); e.currentTarget.close(); return; }
+    const b = e.target.closest('[data-pr]'); if (!b) return;
+    const act = b.dataset.pr;
+    const w = byId(PR.id);
+    if (act === 'close') { stopPractice(); $('#dlg-practice').close(); return; }
+    if (!w) return;
+    if (act === 'listen') { speak(w.hz); return; }
+    if (act === 'animate') { practiceAnimate(); return; }
+    if (act === 'reset') { mountPractice(w); return; }
+    if (act === 'outline') { PR.outline = !PR.outline; openPractice(PR.id); return; }
+    if (act === 'big' || act === 'small') {
+      const cur = +S.settings.padScale || 1;
+      S.settings.padScale = Math.min(2.4, Math.max(0.7, Math.round((cur + (act === 'big' ? 0.2 : -0.2)) * 100) / 100));
+      touchSettings(); mountPractice(w);
+    }
   });
   $('#dlg-backup').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
   $('#file-import').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) importBackup(f); });
