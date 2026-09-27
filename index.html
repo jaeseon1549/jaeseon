@@ -338,6 +338,9 @@ dialog::backdrop{ background:rgba(10,20,16,.45); }
 .hsk-w{ appearance:none; cursor:pointer; min-height:42px; padding:0 12px; border-radius:10px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-family:var(--f-han); font-size:20px; }
 .hsk-w.on{ border-color:var(--grid); background:var(--ok-soft); }
 .hsk-w:active{ transform:scale(.95); }
+.pr-answer{ margin-top:14px; }
+.pr-answer-label{ text-align:center; font-size:13px; color:var(--muted); margin-bottom:6px; }
+.pr-answer .hw-box{ font-family:var(--f-han); font-size:calc(var(--s) * .72); color:var(--grid); line-height:1; }
 .pr-msg{ text-align:center; font-size:15px; min-height:22px; margin-top:10px; color:var(--muted); }
 .pr-msg.ok{ color:var(--grid); }
 .pr-msg.no{ color:var(--pen); }
@@ -641,7 +644,7 @@ async function fromMyMemory(hz) {
 
 /* ───────── 저장소: 이 휴대폰(브라우저)에 저장 ───────── */
 const stat = () => ({ w: 1, n: 0, seen: 0, ok1: 0, ok2: 0, miss: 0, last: 0 });
-const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', wrMiss: 5, backStroke: false, padScale: 1, lastBackup: 0, lastNag: 0 } });
+const defaults = () => ({ v: 1, words: [], sents: {}, settings: { pass: 70, len: 10, autoSpeak: true, spMethod: 'auto', kbdOk: false, wrMethod: 'stroke', wrMiss: 5, backStroke: false, padScale: 1, penScale: 1, lastBackup: 0, lastNag: 0 } });
 let S = defaults();
 let storageOK = true;
 const R = { state: 'local' };
@@ -1590,6 +1593,7 @@ function patchWrite(sess) {
 }
 const cssVar = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
 const inkColor = () => cssVar('--ink', '#1E2A26');
+const penK = () => Math.min(1.8, Math.max(0.4, +S.settings.penScale || 1));
 let lastPadWidth = 0;
 const padAvail = () => Math.max(200, ($('#main').clientWidth || 360) - 40);
 function padSize(n) {
@@ -1645,7 +1649,7 @@ function mountHW(sess, w) {
         width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
         showOutline: false, showCharacter: false,
         strokeColor: ink, outlineColor: soft, drawingColor: ink, highlightColor: grid, highlightCompleteColor: grid,
-        drawingWidth: Math.max(5, Math.round(size * 0.05)),
+        drawingWidth: Math.max(2, Math.round(size * 0.05 * penK())),
         showHintAfterMisses: 5, highlightOnComplete: true, leniency: 1.35,
         acceptBackwardsStrokes: !!S.settings.backStroke,
         strokeAnimationSpeed: 1.3, delayBetweenStrokes: 160,
@@ -1830,7 +1834,7 @@ function setupCanvas(cv, i, size, sess, editable) {
   cv.width = Math.round(size * dpr); cv.height = Math.round(size * dpr);
   cv.style.width = size + 'px'; cv.style.height = size + 'px';
   const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
-  const color = inkColor(); const lw = Math.max(4, size * 0.058);
+  const color = inkColor(); const lw = Math.max(2, size * 0.058 * penK());
   const draw = () => { ctx.clearRect(0, 0, size, size); paintStrokes(ctx, sess.strokes[i], size, color, lw); };
   draw();
   if (!editable) return;
@@ -2051,6 +2055,7 @@ function openPractice(id) {
       <button type="button" class="icon-btn" data-pr="close" aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <p class="pr-mean">${esc(w.mean || w.hz)}</p>
     <div class="pads-wrap"><div class="pads" id="pr-pads"></div></div>
+    <div class="pr-answer" id="pr-answer" hidden><p class="pr-answer-label">정답</p><div class="pads-wrap"><div class="pads" id="pr-ans-pads"></div></div></div>
     <div class="pad-zoom"><button type="button" class="zoom-btn" data-pr="small" aria-label="칸 작게">−</button><span>칸 크기</span><button type="button" class="zoom-btn" data-pr="big" aria-label="칸 크게">+</button></div>
     <p class="pr-msg" id="pr-msg"></p>
     <div class="btn-row center">
@@ -2072,7 +2077,8 @@ function mountPractice(w) {
   stopPractice();
   const cs = chars(w.hz);
   const size = sizePads(holder, cs.length);
-  const msg = $('#pr-msg'); if (msg) msg.textContent = '';
+  const msg = $('#pr-msg'); if (msg) { msg.textContent = ''; msg.className = 'pr-msg'; }
+  hidePracticeAnswer();
   if (practiceFree()) {
     PR.sess = { phase: 'ask', busy: false, strokes: cs.map(() => []), hist: [] };
     mountCanvasPads(PR.sess, w, 'pr-pads');
@@ -2087,7 +2093,7 @@ function mountPractice(w) {
         width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
         showOutline: PR.outline, showCharacter: false,
         strokeColor: ink, outlineColor: soft, drawingColor: ink, highlightColor: grid, highlightCompleteColor: grid,
-        drawingWidth: Math.max(5, Math.round(size * 0.05)),
+        drawingWidth: Math.max(2, Math.round(size * 0.05 * penK())),
         showHintAfterMisses: 3, highlightOnComplete: true, leniency: 1.35,
         acceptBackwardsStrokes: !!S.settings.backStroke,
         onLoadCharDataError: () => toast('이 글자의 획순 정보를 받지 못했어요. 인터넷 연결을 확인해 주세요.'),
@@ -2095,6 +2101,29 @@ function mountPractice(w) {
     } catch (e) { return; }
     PR.writers.push(wr);
     try { wr.quiz({ onComplete: () => { try { wr.showCharacter(); } catch (e) {} } }); } catch (e) {}
+  });
+}
+function hidePracticeAnswer() {
+  const box = $('#pr-answer');
+  if (box) { box.hidden = true; const p = $('#pr-ans-pads'); if (p) p.innerHTML = ''; }
+}
+function showPracticeAnswer(w) {
+  const box = $('#pr-answer'), holder = $('#pr-ans-pads');
+  if (!box || !holder) return;
+  box.hidden = false;
+  const cs = chars(w.hz);
+  const size = Math.round(sizePads(holder, cs.length) * 0.8);
+  holder.style.setProperty('--s', size + 'px');
+  holder.innerHTML = cs.map((c, i) => `<div class="pad"><div class="hw-box" lang="zh-CN">${esc(c)}</div></div>`).join('');
+  $$('.hw-box', holder).forEach((el, i) => {
+    try {
+      el.textContent = '';
+      const wr = HanziWriter.create(el, cs[i], {
+        width: size - 3, height: size - 3, padding: Math.round(size * 0.08),
+        showCharacter: true, showOutline: false, strokeColor: cssVar('--grid', '#2E7A5E'),
+      });
+      wr.showCharacter();
+    } catch (e) { el.textContent = cs[i]; }
   });
 }
 async function gradePractice() {
@@ -2113,6 +2142,7 @@ async function gradePractice() {
   } catch (e) { msg.className = 'pr-msg no'; msg.textContent = '획순 정보를 받지 못해 채점하지 못했어요.'; return; }
   if (!bad.length) { msg.className = 'pr-msg ok'; msg.textContent = '잘 썼어요.'; }
   else { msg.className = 'pr-msg no'; msg.textContent = bad.join(' / '); }
+  const w2 = byId(PR.id); if (w2) showPracticeAnswer(w2);
 }
 async function practiceAnimate() {
   const w = byId(PR.id); if (!w) return;
@@ -2190,6 +2220,12 @@ function openSettings() {
     <div class="set-block"><h3>쓰기 채점 방법</h3>
       <div class="chips">${[['stroke', '획순 바로 채점'], ['free', '다 쓰고 확인'], ['self', '스스로 채점']].map(([v, l]) => `<button type="button" class="chip" data-set="wrmethod" data-v="${v}" aria-pressed="${(st.wrMethod || 'stroke') === v}">${l}</button>`).join('')}</div>
       <p class="help" style="margin-top:8px">획순 바로 채점은 한 획 쓸 때마다 확인해요. 다 쓰고 확인은 글자를 다 쓴 뒤 채점하기를 눌러 정답 획과 견줘 채점하고, 기회는 세 번이에요. 스스로 채점은 정답을 보고 직접 고르는 방식이에요.</p>
+      <p class="field-label" style="margin-top:16px">획 굵기</p>
+      <div class="range-row">
+        <input type="range" id="penscale" min="0.4" max="1.6" step="0.1" value="${+st.penScale || 1}" aria-label="획 굵기">
+        <span class="range-val" id="penscale-val">${Math.round((+st.penScale || 1) * 100)}%</span>
+      </div>
+      <p class="help" style="margin-top:8px">복잡한 글자를 쓸 때 획이 굵어 답답하면 줄여 보세요. 쓰기 퀴즈와 쓰기 연습에 함께 적용돼요.</p>
       <p class="field-label" style="margin-top:16px">몇 획 틀리면 오답으로 할까요 <small>(획순 바로 채점일 때)</small></p>
       <div class="range-row">
         <input type="range" id="wrmiss" min="0" max="20" step="1" value="${+st.wrMiss || 0}" aria-label="오답 기준 획 수">
@@ -2339,11 +2375,21 @@ function bind() {
   });
   $('#btn-settings').addEventListener('click', openSettings);
   $('#dlg-settings').addEventListener('input', e => {
-    if (e.target.id !== 'wrmiss') return;
-    const v = +e.target.value || 0;
-    S.settings.wrMiss = v;
-    touchSettings();
-    const lab = $('#wrmiss-val'); if (lab) lab.textContent = v ? v + '획' : '제한 없음';
+    if (e.target.id === 'wrmiss') {
+      const v = +e.target.value || 0;
+      S.settings.wrMiss = v;
+      touchSettings();
+      const lab = $('#wrmiss-val'); if (lab) lab.textContent = v ? v + '획' : '제한 없음';
+      return;
+    }
+    if (e.target.id === 'penscale') {
+      const v = Math.min(1.8, Math.max(0.4, +e.target.value || 1));
+      S.settings.penScale = v;
+      touchSettings();
+      const lab = $('#penscale-val'); if (lab) lab.textContent = Math.round(v * 100) + '%';
+      const w = byId(PR.id);
+      if ($('#dlg-practice').open && w) mountPractice(w);
+    }
   });
   $('#dlg-settings').addEventListener('click', e => {
     if (e.target === e.currentTarget) { e.currentTarget.close(); return; }
